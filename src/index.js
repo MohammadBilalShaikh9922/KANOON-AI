@@ -1,4 +1,3 @@
-
 const MODEL = "@cf/meta/llama-3.2-1b-instruct";
 
 const SYSTEM_PROMPT = `
@@ -80,17 +79,21 @@ function jsonResponse(data, status = 200) {
   });
 }
 
+
 function cleanModelAnswer(value) {
   return String(value || "")
     .replace(/\\([\\`*_{}\[\]()#+\-.!>])/g, "$1")
     .replace(/\\(?=\d)/g, "")
     .replace(/\\+[ \t]*\r?\n/g, "\n")
     .replace(/\r\n?/g, "\n")
+    .replace(/^[ \t]*\*[ \t]+/gm, "- ")
+    .replace(/^[ \t]*#{1,6}[ \t]+/gm, "")
+    .replace(/\*\*(.*?)\*\*/gs, "$1")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
-    .replace(/\*\*(.*?)\*\*/gs, "$1")
     .trim();
 }
+
 
 function isConsumerQuestion(message) {
   return /\b(consumer|refund|defective|damaged|faulty|seller|product|marketplace|e-commerce|ecommerce|consumer protection|consumer commission|return policy)\b/i.test(
