@@ -575,16 +575,87 @@ function addMessage(text, sender, label = "") {
 
   item.innerHTML = `
     <div class="bubble">
-      ${displayHtml}
+      <div class="answer-content">
+        ${displayHtml}
+      </div>
       ${label ? `<small>${escapeHtml(label)}</small>` : ""}
+      ${
+        sender !== "user"
+          ? `<button type="button" class="copy-answer-btn" aria-label="Copy answer">📋 Copy Answer</button>`
+          : ""
+      }
     </div>
   `;
+
+  if (sender !== "user") {
+    const copyButton = item.querySelector(".copy-answer-btn");
+
+    copyButton.addEventListener("click", async () => {
+      const answerContent = item.querySelector(".answer-content");
+      if (!answerContent) return;
+
+      const clone = answerContent.cloneNode(true);
+
+      // Convert the formatted answer to clean, readable plain text.
+      clone.querySelectorAll("button, input, textarea, select, script, style")
+        .forEach(element => element.remove());
+
+      clone.querySelectorAll("pre").forEach(element => {
+        element.insertAdjacentText("beforebegin", "\n");
+        element.insertAdjacentText("afterend", "\n");
+      });
+
+      clone.querySelectorAll("li").forEach(element => {
+        element.insertAdjacentText("afterbegin", "• ");
+      });
+
+      clone.querySelectorAll("h1, h2, h3, h4, h5, h6, p, ul, ol, blockquote")
+        .forEach(element => {
+          element.insertAdjacentText("beforebegin", "\n");
+          element.insertAdjacentText("afterend", "\n");
+        });
+
+      const cleanText = (clone.innerText || clone.textContent || "")
+        .replace(/\n[ \t]+/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(cleanText);
+        } else {
+          const temporary = document.createElement("textarea");
+          temporary.value = cleanText;
+          temporary.style.position = "fixed";
+          temporary.style.opacity = "0";
+          document.body.appendChild(temporary);
+          temporary.select();
+
+          const copied = document.execCommand("copy");
+          temporary.remove();
+
+          if (!copied) throw new Error("Copy failed");
+        }
+
+        copyButton.textContent = "✓ Copied!";
+        setTimeout(() => {
+          copyButton.textContent = "📋 Copy Answer";
+        }, 1800);
+      } catch (error) {
+        copyButton.textContent = "Copy failed — select text";
+        setTimeout(() => {
+          copyButton.textContent = "📋 Copy Answer";
+        }, 2500);
+      }
+    });
+  }
 
   messages.appendChild(item);
   messages.scrollTop = messages.scrollHeight;
 
   return item;
 }
+
 
 // --------------------------------------------------
 // CLEAN CTRL+C COPYING FOR ASSISTANT ANSWERS
