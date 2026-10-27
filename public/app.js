@@ -16,10 +16,43 @@ function toast(message) {
 }
 
 // --------------------------------------------------
-// OFFICIAL LEGAL RESOURCE DIRECTORY
+// SAFE HTML AND URL HELPERS
 // --------------------------------------------------
 
-const lawResources = [
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, character => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[character]);
+}
+
+function safeHttpsUrl(value) {
+  try {
+    const url = new URL(String(value || ""));
+    return url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+// --------------------------------------------------
+// SUPABASE CONFIGURATION
+// Public publishable key only — never use a secret key
+// or service_role key in frontend JavaScript.
+// --------------------------------------------------
+
+const SUPABASE_URL = "https://kjyeplfpthoqwxzkgzzb.supabase.co";
+const SUPABASE_KEY = "sb_publishable_ciKRaCwZ8FCsE8shneFcjA_LBW6fmwR";
+
+// --------------------------------------------------
+// OFFICIAL FALLBACK LEGAL RESOURCE DIRECTORY
+// Displayed if the database is empty or unavailable.
+// --------------------------------------------------
+
+const fallbackLawResources = [
   {
     tag: "OFFICIAL LEGISLATION",
     title: "India Code",
@@ -64,11 +97,18 @@ const lawResources = [
   }
 ];
 
+let lawResources = [...fallbackLawResources];
+let lawsLoadedFromSupabase = false;
+
+// --------------------------------------------------
+// LAW LIBRARY RENDERING
+// --------------------------------------------------
+
 function renderLaws(filter = "") {
   const grid = $("#lawGrid");
   if (!grid) return;
 
-  const query = filter.trim().toLowerCase();
+  const query = String(filter).trim().toLowerCase();
 
   const matches = lawResources.filter(resource =>
     `${resource.tag} ${resource.title} ${resource.desc}`
@@ -89,21 +129,134 @@ function renderLaws(filter = "") {
     return;
   }
 
-  grid.innerHTML = matches.map(resource => `
-    <article class="law-card">
-      <span class="law-tag">${resource.tag}</span>
-      <h3>${resource.title}</h3>
-      <p>${resource.desc}</p>
-      <a href="${resource.url}" target="_blank" rel="noopener noreferrer">
-        ${resource.link} ↗
-      </a>
-    </article>
-  `).join("");
+  grid.innerHTML = matches.map(resource => {
+    const url = safeHttpsUrl(resource.url);
+
+    return `
+      <article class="law-card">
+        <span class="law-tag">${escapeHtml(resource.tag)}</span>
+        <h3>${escapeHtml(resource.title)}</h3>
+        <p>${escapeHtml(resource.desc)}</p>
+        ${
+          url
+            ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+                 ${escapeHtml(resource.link || "Open source")} ↗
+               </a>`
+            : ""
+        }
+      </article>
+    `;
+  }).join("");
 }
 
+// --------------------------------------------------
+// LOAD LEGAL RESOURCES FROM SUPABASE
+// Table: public.legal_resources
+// Columns: id, title, description, category,
+//          source_url, created_at
+// --------------------------------------------------
+
+async function loadLawResources() {
+  const grid = $("#lawGrid");
+  const status = $("#lawStatus");
+  const searchInput = $("#lawSearch");
+
+  if (grid) {
+    grid.innerHTML =
+      '<div class="notice">Loading legal resources...</div>';
+  }
+
+  if (status) {
+    status.textContent = "Connecting to the legal resource database...";
+  }
+
+  try {
+    const endpoint =
+      `${SUPABASE_URL}/rest/v1/legal_resources` +
+      "?select=id,title,description,category,source_url" +
+      "&order=title.asc";
+
+    const response = await fetch(endpoint, {
+      method: "GET",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Supabase returned HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error("No records were returned by the legal resource table.");
+    }
+
+    const databaseResources = data
+      .filter(item =>
+        item &&
+        typeof item.title === "string" &&
+        item.title.trim() !== "" &&
+        typeof item.source_url === "string" &&
+        safeHttpsUrl(item.source_url) !== ""
+      )
+      .map(item => ({
+        tag: item.category || "LEGAL RESOURCE",
+        title: item.title,
+        desc: item.description || "Visit the source for more information.",
+        url: item.source_url,
+        link: "Open official source"
+      }));
+
+    if (databaseResources.length === 0) {
+      throw new Error("No usable legal resource records were found.");
+    }
+
+    lawResources = databaseResources;
+    lawsLoadedFromSupabase = true;
+
+    console.info(
+      `KANOON AI: Loaded ${lawResources.length} resources from Supabase.`
+    );
+
+    if (status) {
+      status.textContent =
+        `Loaded ${lawResources.length} resources from the database.`;
+    }
+
+  } catch (error) {
+    lawsLoadedFromSupabase = false;
+    lawResources = [...fallbackLawResources];
+
+    console.warn(
+      "KANOON AI: Could not load database resources. Showing fallback links.",
+      error
+    );
+
+    if (status) {
+      status.textContent =
+        "The database is unavailable. Showing the built-in official resource links instead.";
+    }
+  }
+
+  // Preserve any search text entered while resources were loading.
+  renderLaws(searchInput ? searchInput.value : "");
+}
+
+// Render useful fallback links immediately.
 renderLaws();
 
+// Load database resources without blocking the rest of the website.
+loadLawResources();
+
+// --------------------------------------------------
+// FOOTER YEAR
+// --------------------------------------------------
+
 const yearElement = $("#year");
+
 if (yearElement) {
   yearElement.textContent = new Date().getFullYear();
 }
@@ -147,7 +300,10 @@ function navigate() {
   const menuButton = $("#mobileMenu");
 
   if (nav) nav.classList.remove("open");
-  if (menuButton) menuButton.setAttribute("aria-expanded", "false");
+
+  if (menuButton) {
+    menuButton.setAttribute("aria-expanded", "false");
+  }
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -222,21 +378,8 @@ if (lawSearch) {
 }
 
 // --------------------------------------------------
-// SAFE TEXT OUTPUT
-// --------------------------------------------------
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, character => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;"
-  })[character]);
-}
-
-// --------------------------------------------------
 // DEMONSTRATION LEGAL ASSISTANT
+// This is not a live AI model.
 // --------------------------------------------------
 
 function addMessage(text, sender, label = "") {
@@ -249,11 +392,9 @@ function addMessage(text, sender, label = "") {
     "message " +
     (sender === "user" ? "user-message" : "assistant-message");
 
-  const avatar = sender === "user" ? "You" : "K";
-
   const avatarHtml = sender === "user"
     ? ""
-    : `<span class="message-avatar">${avatar}</span>`;
+    : '<span class="message-avatar">K</span>';
 
   item.innerHTML = `
     ${avatarHtml}
@@ -273,7 +414,7 @@ function demoReply(question) {
   let topic = "General legal information";
 
   let guidance =
-    "Start by writing down the key facts, dates, people or organisations involved, and the outcome you want. Keep copies of relevant communications and documents. Check the applicable law and official procedure for your location before taking action.";
+    "Write down the key facts, dates, people or organisations involved, and the outcome you want. Keep copies of relevant communications and documents. Check the applicable law and official procedure for your location before taking action.";
 
   if (
     query.includes("tenant") ||
@@ -294,7 +435,7 @@ function demoReply(question) {
     topic = "Consumer rights";
 
     guidance =
-      "Keep the invoice, order details, warranty, screenshots and messages with the seller or service provider. First make a dated written complaint and clearly state the resolution you seek. You can explore the National Consumer Helpline and official consumer commission resources. The correct forum and process depend on the facts and current rules.";
+      "Keep the invoice, order details, warranty, screenshots and messages with the seller or service provider. Make a dated written complaint and state the resolution you seek. You can explore the National Consumer Helpline and official consumer commission resources. The correct forum and process depend on the facts and current rules.";
   } else if (
     query.includes("cyber") ||
     query.includes("fraud") ||
@@ -304,7 +445,7 @@ function demoReply(question) {
     topic = "Cyber safety";
 
     guidance =
-      "If money has been lost, contact your bank or payment provider immediately and use India's official cybercrime reporting portal or helpline as appropriate. Preserve transaction IDs, messages, phone numbers and screenshots. Do not share OTPs or passwords. The national cybercrime helpline commonly used for financial cyber fraud in India is 1930; verify current official instructions promptly.";
+      "If money has been lost, contact your bank or payment provider immediately and use India's official cybercrime reporting portal or helpline as appropriate. Preserve transaction IDs, messages, phone numbers and screenshots. Do not share OTPs or passwords. For financial cyber fraud, call 1930 promptly and follow current official instructions.";
   } else if (
     query.includes("employment") ||
     query.includes("salary") ||
@@ -353,7 +494,7 @@ if (chatForm) {
   });
 }
 
-// Suggested topic buttons in the assistant sidebar
+// Suggested topic buttons in the assistant sidebar.
 $$("[data-chat]").forEach(button => {
   button.addEventListener("click", () => {
     const input = $("#chatInput");
@@ -442,6 +583,7 @@ if (draftForm) {
     }
 
     const type = $("#draftType")?.value || "consumer";
+
     const recipient =
       $("#recipient")?.value.trim() || "[Recipient name / department]";
 
@@ -518,5 +660,7 @@ if (draftForm) {
   });
 }
 
-// Authentication has intentionally been removed.
-// KANOON AI currently works without user accounts.
+// --------------------------------------------------
+// AUTHENTICATION
+// Intentionally disabled. KANOON AI is public for now.
+// --------------------------------------------------
