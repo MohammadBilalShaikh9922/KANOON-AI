@@ -1,4 +1,3 @@
-
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
@@ -38,26 +37,192 @@ function safeHttpsUrl(value) {
   }
 }
 
+// Normalize escaped text returned by an API or language model.
 function normalizeAnswerText(value) {
   let text = String(value ?? "").replace(/\r\n?/g, "\n");
 
-  text = text.replace(/\\+n/g, "\n");
-  text = text.replace(/\\+[ \t]*(?=\n|$)/g, "");
+  // Convert literal escaped newlines into actual line breaks.
+  text = text.replace(/\\n/g, "\n");
+  text = text.replace(/\\r/g, "");
+
+  // Remove backslashes left at the end of lines.
+  text = text.replace(/[ \t]*\\+[ \t]*(?=\n|$)/g, "");
+
+  // Unescape Markdown punctuation, including escaped list markers.
   text = text.replace(/\\([\\`*_{}\[\]()#+\-.!>:])/g, "$1");
+
+  // Remove any remaining formatting-related backslashes.
   text = text.replace(/\\/g, "");
 
+  // Convert Markdown links into readable, safe plain-text links.
   text = text.replace(
     /\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g,
     "$1 ($2)"
   );
 
+  // Remove Markdown heading markers while retaining the heading text.
+  text = text.replace(/^[ \t]*#{1,6}[ \t]+/gm, "");
+
+  // Remove stray backslashes after the transformations.
+  text = text.replace(/[ \t]*\\+[ \t]*(?=\n|$)/g, "");
+
+  // Avoid excessive blank lines and trailing spaces.
   return text
-    .replace(/^[ \t]*#{1,6}[ \t]+/gm, "")
-    .replace(/\*\*(.*?)\*\*/gs, "$1")
-    .replace(/(^|\n)[ \t]*\*[ \t]+/g, "$1- ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+// Safely format plain text, headings, bold text and lists.
+// All model-provided HTML is escaped before rendering.
+function renderAnswerHtml(value) {
+  const text = normalizeAnswerText(value);
+
+  if (!text) return "";
+
+  const lines = text.split("\n");
+  const output = [];
+
+  let inBulletList = false;
+  let inNumberedList = false;
+
+  function closeLists() {
+    if (inBulletList) {
+      output.push("</ul>");
+      inBulletList = false;
+    }
+
+    if (inNumberedList) {
+      output.push("</ol>");
+      inNumberedList = false;
+    }
+  }
+
+  function formatInline(line) {
+    let safe = escapeHtml(line);
+
+    // Format bold text only after escaping HTML.
+    safe = safe.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    safe = safe.replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+    // Format inline code safely.
+    safe = safe.replace(/`([^`]+)`/g, "<code>$1</code>");
+
+    return safe;
+  }
+
+  const knownHeadings = new Set([
+    "LIKELY LEGAL ISSUE",
+    "WHAT WE KNOW",
+    "IMPORTANT QUESTIONS",
+    "PRACTICAL NEXT STEPS",
+    "DOCUMENTS AND EVIDENCE",
+    "OFFICIAL RESOURCES TO CHECK",
+    "WHEN TO SEEK PROFESSIONAL HELP",
+    "SUMMARY",
+    "KEY POINTS",
+    "LEGAL POSITION",
+    "RELEVANT LAW",
+    "POSSIBLE OPTIONS",
+    "NEXT STEPS",
+    "IMPORTANT NOTES",
+    "CONCLUSION"
+  ]);
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (!line) {
+      closeLists();
+      continue;
+    }
+
+    // Recognize numbered headings such as "1. Likely legal issue".
+    const numberedHeading = line.match(
+      /^\d+\.\s+(.{2,90})$/
+    );
+
+    const headingCandidate = numberedHeading
+      ? numberedHeading[1].trim()
+      : line;
+
+    const isKnownHeading = knownHeadings.has(
+      headingCandidate
+        .replace(/\*\*/g, "")
+        .replace(/:$/, "")
+        .toUpperCase()
+    );
+
+    const isUppercaseHeading =
+      headingCandidate.length <= 90 &&
+      /^[A-Z0-9][A-Z0-9 &'(),/–—-]*:?$/.test(
+        headingCandidate.replace(/\*\*/g, "")
+      ) &&
+      /[A-Z]/.test(headingCandidate);
+
+    const isMarkdownHeading = /^#{1,6}\s+/.test(rawLine);
+
+    if (
+      isMarkdownHeading ||
+      isKnownHeading ||
+      (isUppercaseHeading && !/^\d+\./.test(line))
+    ) {
+      closeLists();
+
+      const headingText = line
+        .replace(/^#{1,6}\s+/, "")
+        .replace(/\\+$/, "")
+        .trim();
+
+      output.push(`<h3>${formatInline(headingText)}</h3>`);
+      continue;
+    }
+
+    // Bullet list items: -, *, or •.
+    const bullet = line.match(/^[-*•]\s+(.+)$/);
+
+    if (bullet) {
+      if (inNumberedList) {
+        output.push("</ol>");
+        inNumberedList = false;
+      }
+
+      if (!inBulletList) {
+        output.push("<ul>");
+        inBulletList = true;
+      }
+
+      output.push(`<li>${formatInline(bullet[1])}</li>`);
+      continue;
+    }
+
+    // Numbered list items: "1. Item" or "1) Item".
+    const numbered = line.match(/^\d+[.)]\s+(.+)$/);
+
+    if (numbered) {
+      if (inBulletList) {
+        output.push("</ul>");
+        inBulletList = false;
+      }
+
+      if (!inNumberedList) {
+        output.push("<ol>");
+        inNumberedList = true;
+      }
+
+      output.push(`<li>${formatInline(numbered[1])}</li>`);
+      continue;
+    }
+
+    closeLists();
+
+    // Preserve readable paragraph spacing without raw HTML.
+    output.push(`<p>${formatInline(line)}</p>`);
+  }
+
+  closeLists();
+
+  return output.join("");
 }
 
 function removeTrailingDisclaimer(value) {
@@ -420,16 +585,13 @@ function addMessage(text, sender, label = "") {
     "message " +
     (sender === "user" ? "user-message" : "assistant-message");
 
-  const avatarHtml = sender === "user"
-    ? ""
-    : '<span class="message-avatar">K</span>';
-
-  const displayText = normalizeAnswerText(text);
+  const displayHtml = sender === "user"
+    ? `<p>${escapeHtml(normalizeAnswerText(text)).replace(/\n/g, "<br>")}</p>`
+    : renderAnswerHtml(text);
 
   item.innerHTML = `
-    ${avatarHtml}
     <div class="bubble">
-      <p>${escapeHtml(displayText).replace(/\n/g, "<br>")}</p>
+      ${displayHtml}
       ${label ? `<small>${escapeHtml(label)}</small>` : ""}
     </div>
   `;
@@ -479,7 +641,6 @@ function addOfficialSources(sources) {
   `).join("");
 
   sourceBox.innerHTML = `
-    <span class="message-avatar">K</span>
     <div class="bubble">
       <strong>Official legal resources</strong>
       <ul>${linksHtml}</ul>
@@ -502,7 +663,6 @@ function addLoadingMessage() {
   item.className = "message assistant-message";
 
   item.innerHTML = `
-    <span class="message-avatar">K</span>
     <div class="bubble">
       <p>Preparing your response...</p>
       <small>Connecting to KANOON AI</small>
