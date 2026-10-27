@@ -38,55 +38,36 @@ function safeHttpsUrl(value) {
   }
 }
 
-// Clean AI formatting artifacts while preserving valid URLs.
-// Backslashes are removed; forward slashes are never stripped.
 function normalizeAnswerText(value) {
   let text = String(value ?? "").replace(/\r\n?/g, "\n");
 
-  // Convert literal escaped newline sequences to real newlines.
   text = text.replace(/\\+n/g, "\n");
-
-  // Remove stray backslashes at the ends of lines.
   text = text.replace(/\\+[ \t]*(?=\n|$)/g, "");
-
-  // Remove Markdown escaping, including "1\." and "\:".
   text = text.replace(/\\([\\`*_{}\[\]()#+\-.!>:])/g, "$1");
-
-  // Remove any remaining backslashes, but never forward slashes.
   text = text.replace(/\\/g, "");
 
-  // Convert Markdown links into readable text while preserving URLs.
   text = text.replace(
     /\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g,
     "$1 ($2)"
   );
 
-  // Make common Markdown formatting readable as plain text.
-  text = text
+  return text
     .replace(/^[ \t]*#{1,6}[ \t]+/gm, "")
     .replace(/\*\*(.*?)\*\*/gs, "$1")
     .replace(/(^|\n)[ \t]*\*[ \t]+/g, "$1- ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
-
-  return text;
 }
 
-// Remove known closing disclaimers so only one consistent disclaimer
-// is shown with each AI answer.
 function removeTrailingDisclaimer(value) {
   let answer = normalizeAnswerText(value);
 
   const disclaimerPatterns = [
     /(?:\s*This is general legal information, not case-specific legal advice\.?)(?:\s*Consult a qualified Indian advocate for advice about your particular dispute\.?)?\s*$/i,
-
     /(?:\s*This is general legal information\.?)(?:\s*Check the official website for current service details\.?)?\s*$/i,
-
     /(?:\s*This is general legal information, not case-specific legal advice\.?)(?:\s*Consult a qualified Maharashtra advocate for advice about your particular situation\.?)?\s*$/i,
-
     /(?:\s*General legal information only; not verified legal advice\.?)(?:\s*The listed links are official reference resources selected by topic\.?)?(?:\s*They were not necessarily opened or consulted to generate this answer\.?)?(?:\s*Check current law and consult a qualified lawyer for advice about your specific situation\.?)?\s*$/i,
-
     /(?:\s*General legal information only; not case-specific legal advice\.?)\s*$/i
   ];
 
@@ -105,7 +86,7 @@ function removeTrailingDisclaimer(value) {
 
 // --------------------------------------------------
 // SUPABASE CONFIGURATION
-// Only a publishable key belongs in frontend JavaScript.
+// Use only the publishable key in frontend JavaScript.
 // Never put a service_role or secret key here.
 // --------------------------------------------------
 
@@ -164,10 +145,6 @@ const fallbackLawResources = [
 let lawResources = [...fallbackLawResources];
 let lawsLoadedFromSupabase = false;
 
-// --------------------------------------------------
-// LAW LIBRARY RENDERING
-// --------------------------------------------------
-
 function renderLaws(filter = "") {
   const grid = $("#lawGrid");
   if (!grid) return;
@@ -212,11 +189,6 @@ function renderLaws(filter = "") {
     `;
   }).join("");
 }
-
-// --------------------------------------------------
-// LOAD LEGAL RESOURCES FROM SUPABASE
-// Table: public.legal_resources
-// --------------------------------------------------
 
 async function loadLawResources() {
   const grid = $("#lawGrid");
@@ -452,7 +424,6 @@ function addMessage(text, sender, label = "") {
     ? ""
     : '<span class="message-avatar">K</span>';
 
-  // Normalize first, then escape HTML to prevent injected markup.
   const displayText = normalizeAnswerText(text);
 
   item.innerHTML = `
@@ -545,11 +516,68 @@ function addLoadingMessage() {
 }
 
 // --------------------------------------------------
-// LIVE AI LEGAL ASSISTANT
-// Calls the same-origin Cloudflare Worker API.
+// LEGAL ISSUE ANALYZER CONTROL
+// Injected into the existing page so no HTML change is needed.
 // --------------------------------------------------
 
+let legalAnalyzerEnabled = false;
+
 const chatForm = $("#chatForm");
+
+if (chatForm) {
+  const analyzerControl = document.createElement("div");
+
+  analyzerControl.id = "legalAnalyzerControl";
+  analyzerControl.style.cssText =
+    "display:flex;align-items:center;gap:12px;flex-wrap:wrap;" +
+    "padding:12px 14px;margin:0 0 12px;border:1px solid #d9bd78;" +
+    "border-radius:12px;background:rgba(212,175,55,0.08);";
+
+  analyzerControl.innerHTML = `
+    <button
+      type="button"
+      id="toggleLegalAnalyzer"
+      aria-pressed="false"
+      class="button button-outline"
+    >Enable Legal Issue Analyzer</button>
+    <span id="legalAnalyzerStatus" style="font-size:0.9rem;">
+      Standard legal chat is active.
+    </span>
+  `;
+
+  chatForm.parentNode.insertBefore(analyzerControl, chatForm);
+
+  const analyzerButton = $("#toggleLegalAnalyzer");
+  const analyzerStatus = $("#legalAnalyzerStatus");
+
+  if (analyzerButton && analyzerStatus) {
+    analyzerButton.addEventListener("click", () => {
+      legalAnalyzerEnabled = !legalAnalyzerEnabled;
+
+      analyzerButton.setAttribute(
+        "aria-pressed",
+        String(legalAnalyzerEnabled)
+      );
+
+      analyzerButton.textContent = legalAnalyzerEnabled
+        ? "Disable Legal Issue Analyzer"
+        : "Enable Legal Issue Analyzer";
+
+      analyzerStatus.textContent = legalAnalyzerEnabled
+        ? "Analyzer mode: structured issue, evidence and next steps."
+        : "Standard legal chat is active.";
+
+      analyzerControl.style.background = legalAnalyzerEnabled
+        ? "rgba(212,175,55,0.18)"
+        : "rgba(212,175,55,0.08)";
+    });
+  }
+}
+
+// --------------------------------------------------
+// LIVE AI LEGAL ASSISTANT
+// Uses the same-origin Cloudflare Worker API.
+// --------------------------------------------------
 
 if (chatForm) {
   chatForm.addEventListener("submit", async event => {
@@ -584,6 +612,8 @@ if (chatForm) {
       submitButton.disabled = true;
     }
 
+    const requestMode = legalAnalyzerEnabled ? "analyze" : "chat";
+
     addMessage(question, "user");
     input.value = "";
 
@@ -596,7 +626,8 @@ if (chatForm) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          message: question
+          message: question,
+          mode: requestMode
         })
       });
 
@@ -638,7 +669,9 @@ if (chatForm) {
       addMessage(
         `${answer}\n\n${singleDisclaimer}`,
         "assistant",
-        "GENERAL LEGAL INFORMATION"
+        requestMode === "analyze"
+          ? "LEGAL ISSUE ANALYSIS · GENERAL INFORMATION"
+          : "GENERAL LEGAL INFORMATION"
       );
 
       addOfficialSources(data.sources);
