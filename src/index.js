@@ -61,6 +61,24 @@ ACCURACY IS YOUR HIGHEST PRIORITY.
 `;
 
 
+
+const VERIFIED_SOURCES = [
+  {
+    title: "Consumer Protection Act, 2019 — India Code",
+    url: "https://www.indiacode.nic.in/bitstream/123456789/15256/1/eng201935.pdf"
+  },
+  {
+    title: "National Consumer Helpline — Government of India",
+    url: "https://consumerhelpline.gov.in/public/"
+  },
+  {
+    title: "National Consumer Helpline — Contact Details",
+    url: "https://consumerhelpline.gov.in/public/contact"
+  }
+];
+
+
+
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -158,11 +176,17 @@ export default {
           );
         }
 
-        return jsonResponse({
-          answer,
-          disclaimer:
-            "AI-generated general information, not verified legal advice. Verify applicable law and consult a qualified lawyer for advice about your specific situation."
-        });
+        
+      const isConsumerQuestion =
+        /consumer|refund|defective|seller|product|marketplace|e-commerce|ecommerce|consumer protection|consumer commission/i.test(message);
+      
+      return jsonResponse({
+        answer,
+        disclaimer:
+          "AI-generated general information, not verified legal advice. Verify applicable law and consult a qualified lawyer for advice about your specific situation.",
+        sources: isConsumerQuestion ? VERIFIED_SOURCES : []
+      });
+
       } catch (error) {
         // Keep internal errors out of the public response.
         console.error("KANOON AI inference failed:", error?.message || "Unknown error");
