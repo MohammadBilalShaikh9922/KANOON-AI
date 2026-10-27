@@ -1,92 +1,57 @@
+
 const MODEL = "@cf/meta/llama-3.2-1b-instruct";
 
 const SYSTEM_PROMPT = `
 You are KANOON AI, an Indian legal information assistant.
 
-Your priority is to provide cautious, accurate, practical legal
-information. Never invent legal facts to make an answer appear complete.
+Provide cautious, practical and accurate general legal information.
+Never invent laws, section numbers, court judgments, legal authorities,
+complaint portals, phone numbers, deadlines or URLs.
 
-STRICT ACCURACY RULES
+ACCURACY RULES
 
-1. Never invent laws, Act names, dates, section numbers, court
-judgments, legal bodies, complaint portals, phone numbers or URLs.
+1. The principal Indian consumer-protection statute is the Consumer
+   Protection Act, 2019, subject to applicable amendments and rules.
 
-2. For Indian consumer disputes, the principal statute is the
-Consumer Protection Act, 2019, subject to applicable amendments
-and rules. Never call it the Consumer Protection Act, 2010.
+2. Never invent a legal organisation or complaint website. Do not
+   recommend a supposed Consumer Dispute Resolution Forum (CDRF).
 
-3. Never recommend a nonexistent organisation or website.
-Do not use the name "Consumer Dispute Resolution Forum (CDRF)"
-as a complaint authority. Do not invent a CDRF website.
+3. For ordinary refund disputes, do not recommend the Competition
+   Commission of India unless the facts raise a relevant competition
+   law issue.
 
-4. For an ordinary defective-product or refund dispute, do not
-recommend the Competition Commission of India unless the facts
-specifically raise a competition-law issue.
+4. The National Consumer Helpline is a pre-litigation grievance
+   mechanism. Its official website is:
+   https://consumerhelpline.gov.in/public/
+   Its official contact page is:
+   https://consumerhelpline.gov.in/public/contact
 
-5. The National Consumer Helpline is a pre-litigation grievance
-mechanism. Its official website is:
-https://consumerhelpline.gov.in/public/
-Its official contact page is:
-https://consumerhelpline.gov.in/public/contact
-The published helpline numbers are 1915 and 1800-11-4000.
-Do not guarantee that a complaint will result in a refund.
+5. The published National Consumer Helpline numbers are 1915 and
+   1800-11-4000. Do not guarantee a refund or successful complaint.
 
 6. The Consumer Protection Act, 2019 is available through India Code:
-https://www.indiacode.nic.in/
-Do not claim that you have opened, searched or verified a legal
-source during this conversation unless a research tool actually
-performed that action.
+   https://www.indiacode.nic.in/
 
-7. If you do not know the exact legal authority, procedure, limitation
-period or legal provision, say that it needs verification.
-Do not guess.
+7. Do not claim to have searched, opened or verified a source unless
+   a research tool actually did so during this conversation.
 
-FOR DEFECTIVE PRODUCT AND REFUND QUESTIONS
+8. If you do not know a legal detail, say it needs verification.
+   Never guess a limitation period, jurisdiction or legal provision.
 
-Give these practical steps, adapted to the user's facts:
+RESPONSE STYLE
 
-1. Keep the invoice, order confirmation, payment record, photographs
-or video of the defect, warranty, return policy and messages.
+- Answer the question directly in plain, simple text.
+- Use numbered steps when helpful.
+- Avoid Markdown formatting, HTML and code formatting.
+- Do not output escaped Markdown or literal formatting sequences.
+- Do not invent facts or claim that a source endorses your answer.
+- Ask a concise clarifying question when important facts are missing.
+- Protect the user's private information.
+- End with a reminder that the response is general legal information,
+  not case-specific legal advice.
 
-2. Send a written complaint to the seller and, where relevant,
-the shopping platform. Clearly state the defect and the requested
-resolution. Keep a copy of the complaint and its response.
-
-3. Check the seller's return policy and any applicable warranty.
-Explain that the available remedy depends on the facts and law.
-
-4. Consider lodging a grievance through the National Consumer
-Helpline at https://consumerhelpline.gov.in/public/ or by calling
-1915 or 1800-11-4000. The published service hours are generally
-8 AM to 8 PM, excluding national holidays; users should confirm
-current availability through the official contact page.
-
-5. If the dispute remains unresolved, explain that the user may
-consider the appropriate Consumer Disputes Redressal Commission.
-Do not guess which commission has jurisdiction or invent filing
-instructions. Explain that jurisdiction and procedure depend
-on the facts and applicable rules.
-
-RESPONSE FORMAT
-- Answer the user's actual question directly.
-- Use plain text, simple language and numbered steps.
-- Do not use Markdown symbols, asterisks, backslash escapes,
-  Markdown links, HTML or code formatting in the answer.
-- Do not write literal sequences such as \n, \\ or \[link\].
-- Use short paragraphs and avoid unnecessary repetition.
-- Ask a brief clarifying question if important facts are missing.
-- Never imply that an official source endorses your answer.
-- Do not claim that you searched the internet or verified current law.
-SAFETY AND LIMITATIONS
-
-Do not request passwords, OTPs, bank credentials or unnecessary
-sensitive personal information.
-
-For urgent, complex or high-risk matters, recommend consulting
-a qualified Indian advocate or appropriate legal-aid service.
-
-End with a concise reminder that the response is general legal
-information, not case-specific legal advice.
+For urgent, complex or high-risk matters, suggest consulting a
+qualified Indian advocate or appropriate legal-aid service.
 `;
 
 const VERIFIED_SOURCES = [
@@ -104,8 +69,6 @@ const VERIFIED_SOURCES = [
   }
 ];
 
-
-
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -115,6 +78,58 @@ function jsonResponse(data, status = 200) {
       "X-Content-Type-Options": "nosniff"
     }
   });
+}
+
+function cleanModelAnswer(value) {
+  return String(value || "")
+    .replace(/\\([\\`*_{}\[\]()#+\-.!>])/g, "$1")
+    .replace(/\\(?=\d)/g, "")
+    .replace(/\\+[ \t]*\r?\n/g, "\n")
+    .replace(/\r\n?/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\*\*(.*?)\*\*/gs, "$1")
+    .trim();
+}
+
+function isConsumerQuestion(message) {
+  return /\b(consumer|refund|defective|damaged|faulty|seller|product|marketplace|e-commerce|ecommerce|consumer protection|consumer commission|return policy)\b/i.test(
+    message
+  );
+}
+
+function isDefectiveRefundQuestion(message) {
+  const mentionsProductOrSeller =
+    /\b(defective|damaged|faulty|broken|refund|return|seller|merchant|product|order|purchase|marketplace|online shopping)\b/i.test(
+      message
+    );
+
+  const mentionsRefundProblem =
+    /\b(refund|return|defective|damaged|faulty|broken|refuses?|refused|denied|rejects?|rejected|not responding|not refunding|won't refund|cannot refund|can't refund)\b/i.test(
+      message
+    );
+
+  return mentionsProductOrSeller && mentionsRefundProblem;
+}
+
+function getDefectiveRefundAnswer() {
+  return `If an online seller refuses to refund a defective product in India, take these steps:
+
+1. Keep your evidence. Save the invoice, order confirmation, payment receipt, photographs or videos showing the defect, warranty details, return policy and messages with the seller.
+
+2. Complain to the seller in writing. Explain the defect, when you received the product and what resolution you are requesting. Keep a copy of the complaint and any response.
+
+3. Contact the shopping platform if you bought the product through a marketplace. Use its official customer-support or grievance process and keep the complaint reference number.
+
+4. Check the return policy and applicable warranty. Your available remedies depend on the facts, the terms of sale and applicable law.
+
+5. If the matter remains unresolved, consider registering a grievance with the National Consumer Helpline at https://consumerhelpline.gov.in/public/ or by calling 1915 or 1800-11-4000. This is a pre-litigation grievance mechanism; it does not guarantee a refund.
+
+6. If the dispute remains unresolved, you may consider approaching the appropriate Consumer Disputes Redressal Commission. The correct forum and filing procedure depend on your circumstances and applicable rules, so verify them before filing.
+
+Keep communications factual and respectful. Do not share passwords, OTPs or bank credentials when pursuing a complaint.
+
+This is general legal information, not case-specific legal advice. For advice about your particular dispute, consult a qualified Indian advocate.`;
 }
 
 export default {
@@ -132,8 +147,12 @@ export default {
 
       // Accept requests from this website's own origin only.
       const origin = request.headers.get("Origin");
+
       if (origin && origin !== url.origin) {
-        return jsonResponse({ error: "Request origin not allowed." }, 403);
+        return jsonResponse(
+          { error: "Request origin not allowed." },
+          403
+        );
       }
 
       if (!env.AI) {
@@ -155,14 +174,20 @@ export default {
       }
 
       let body;
+
       try {
         body = await request.json();
       } catch {
-        return jsonResponse({ error: "Invalid JSON request." }, 400);
+        return jsonResponse(
+          { error: "Invalid JSON request." },
+          400
+        );
       }
 
       const message =
-        typeof body.message === "string" ? body.message.trim() : "";
+        typeof body.message === "string"
+          ? body.message.trim()
+          : "";
 
       if (!message) {
         return jsonResponse(
@@ -179,19 +204,33 @@ export default {
       }
 
       try {
-        const result = await env.AI.run(MODEL, {
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: message }
-          ],
-          max_tokens: 500,
-          temperature: 0.2
-        });
+        let answer;
 
-        const answer =
-          result && typeof result.response === "string"
-            ? result.response.trim()
-            : "";
+        // Use a predefined answer for common defective-product
+        // refund disputes instead of relying on the small AI model.
+        if (isDefectiveRefundQuestion(message)) {
+          answer = getDefectiveRefundAnswer();
+        } else {
+          const result = await env.AI.run(MODEL, {
+            messages: [
+              {
+                role: "system",
+                content: SYSTEM_PROMPT
+              },
+              {
+                role: "user",
+                content: message
+              }
+            ],
+            max_tokens: 500,
+            temperature: 0.2
+          });
+
+          answer =
+            result && typeof result.response === "string"
+              ? cleanModelAnswer(result.response)
+              : "";
+        }
 
         if (!answer) {
           return jsonResponse(
@@ -203,20 +242,20 @@ export default {
           );
         }
 
-        
-      const isConsumerQuestion =
-        /consumer|refund|defective|seller|product|marketplace|e-commerce|ecommerce|consumer protection|consumer commission/i.test(message);
-      
-      return jsonResponse({
-        answer,
-        disclaimer:
-          "AI-generated general information, not verified legal advice. Verify applicable law and consult a qualified lawyer for advice about your specific situation.",
-        sources: isConsumerQuestion ? VERIFIED_SOURCES : []
-      });
+        const consumerQuestion = isConsumerQuestion(message);
 
+        return jsonResponse({
+          answer,
+          disclaimer:
+            "AI-generated general information, not verified legal advice. Verify applicable law and consult a qualified lawyer for advice about your specific situation.",
+          sources: consumerQuestion ? VERIFIED_SOURCES : []
+        });
       } catch (error) {
         // Keep internal errors out of the public response.
-        console.error("KANOON AI inference failed:", error?.message || "Unknown error");
+        console.error(
+          "KANOON AI inference failed:",
+          error?.message || "Unknown error"
+        );
 
         return jsonResponse(
           {
@@ -231,6 +270,12 @@ export default {
     // Preserve static website delivery.
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("Method not allowed", { status: 405 });
+    }
+
+    if (!env.ASSETS) {
+      return new Response("Website assets are not configured.", {
+        status: 503
+      });
     }
 
     return env.ASSETS.fetch(request);
