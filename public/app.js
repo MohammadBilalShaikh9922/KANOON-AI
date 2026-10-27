@@ -38,23 +38,28 @@ function safeHttpsUrl(value) {
   }
 }
 
-// Normalize real and escaped newlines, escaped Markdown punctuation,
-// and common formatting artifacts from AI-generated answers.
+// Clean AI formatting artifacts while preserving valid URLs.
+// Backslashes are removed; forward slashes are never stripped.
 function normalizeAnswerText(value) {
   let text = String(value ?? "").replace(/\r\n?/g, "\n");
 
-  // Convert backslash + real newline and literal escaped "\n"
-  // into normal line breaks.
-  text = text.replace(/\\+(?:[ \t]*\n|n)/g, "\n");
+  // Convert literal escaped newline sequences to real newlines.
+  text = text.replace(/\\+n/g, "\n");
 
-  // Remove Markdown escaping, including escaped list punctuation.
-  text = text.replace(/\\([\\`*_{}\[\]()#+\-.!>])/g, "$1");
+  // Remove stray backslashes at the ends of lines.
+  text = text.replace(/\\+[ \t]*(?=\n|$)/g, "");
 
-  // Fix numbered lists such as "1\." and "2\.".
-  text = text.replace(/(^|\n)([ \t]*\d+)\\\./g, "$1$2.");
+  // Remove Markdown escaping, including "1\." and "\:".
+  text = text.replace(/\\([\\`*_{}\[\]()#+\-.!>:])/g, "$1");
 
-  // Remove any remaining stray backslashes from formatted answers.
+  // Remove any remaining backslashes, but never forward slashes.
   text = text.replace(/\\/g, "");
+
+  // Convert Markdown links into readable text while preserving URLs.
+  text = text.replace(
+    /\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g,
+    "$1 ($2)"
+  );
 
   // Make common Markdown formatting readable as plain text.
   text = text
@@ -68,8 +73,8 @@ function normalizeAnswerText(value) {
   return text;
 }
 
-// Remove known closing disclaimers so the interface can display
-// one consistent disclaimer without duplicating the answer's ending.
+// Remove known closing disclaimers so only one consistent disclaimer
+// is shown with each AI answer.
 function removeTrailingDisclaimer(value) {
   let answer = normalizeAnswerText(value);
 
@@ -85,7 +90,6 @@ function removeTrailingDisclaimer(value) {
     /(?:\s*General legal information only; not case-specific legal advice\.?)\s*$/i
   ];
 
-  // Repeat because an answer may end with more than one disclaimer.
   let previousAnswer;
 
   do {
@@ -448,8 +452,7 @@ function addMessage(text, sender, label = "") {
     ? ""
     : '<span class="message-avatar">K</span>';
 
-  // Escape content before inserting it into the page.
-  // Newlines are converted to <br> only after HTML escaping.
+  // Normalize first, then escape HTML to prevent injected markup.
   const displayText = normalizeAnswerText(text);
 
   item.innerHTML = `
@@ -623,15 +626,12 @@ if (chatForm) {
         loadingMessage.remove();
       }
 
-      // Strip formatting artifacts and known trailing disclaimers.
       const answer = removeTrailingDisclaimer(data.answer);
 
       if (!answer) {
         throw new Error("The AI returned an empty answer after formatting.");
       }
 
-      // Display one concise disclaimer in the answer.
-      // Do not append the backend disclaimer a second time.
       const singleDisclaimer =
         "General legal information only; not case-specific legal advice.";
 
