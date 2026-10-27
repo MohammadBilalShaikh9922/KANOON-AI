@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08111f">
+  <meta name="description" content="KANOON AI — accessible, understandable Indian legal information and assistance.">
+  <title>KANOON AI — Legal clarity for everyone</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="topline"><span class="status-dot"></span> INDIAN LEGAL INFORMATION, MADE MORE ACCESSIBLE</div>
+  <header class="site-header">
+    <a class="brand" href="#home" aria-label="KANOON AI home">
+      <span class="brand-mark">K<span>•</span></span>
+      <span><strong>KANOON <em>AI</em></strong><small>LEGAL INTELLIGENCE</small></span>
+    </a>
+    <button class="mobile-menu" id="mobileMenu" aria-label="Toggle navigation">☰</button>
+    <nav id="nav">
+      <a href="#home" data-nav="home">Home</a>
+      <a href="#assistant" data-nav="assistant">AI Assistant</a>
+      <a href="#laws" data-nav="laws">Law Library</a>
+      <a href="#documents" data-nav="documents">Documents</a>
+      <a href="#drafts" data-nav="drafts">Draft Generator</a>
+    </nav>
+    <a class="button button-outline header-cta" href="#signin">Sign in <span>↗</span></a>
+  </header>
+
+  <main>
+    <section class="page active" id="page-home" data-page="home">
+      <div class="hero section-wrap">
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="sparkle">✦</span> A NEW WAY TO UNDERSTAND THE LAW</div>
+          <h1>Legal clarity.<br><span>Within reach.</span></h1>
+          <p class="hero-text">Understand your rights, explore Indian law, and prepare for your next step — with an AI-assisted legal information platform built for everyone.</p>
+          <div class="hero-actions">
+            <a class="button button-gold" href="#assistant">Ask a legal question <span>→</span></a>
+            <a class="button button-quiet" href="#laws">Explore law library <span>↗</span></a>
+          </div>
+          <div class="trust-row"><span class="shield">✓</span> Built around clarity, privacy and trusted sources</div>
+        </div>
+        <div class="hero-art" aria-label="Decorative legal illustration">
+          <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+          <div class="art-glow"></div>
+          <div class="pillar pillar-left"></div><div class="pillar pillar-mid"></div><div class="pillar pillar-right"></div>
+          <div class="scales">
+            <div class="scale-top"></div><div class="scale-stem"></div><div class="scale-arm"></div>
+            <div class="scale-string left"></div><div class="scale-string right"></div>
+            <div class="scale-pan pan-left"></div><div class="scale-pan pan-right"></div><div class="scale-base"></div>
+          </div>
+          <div class="art-caption"><span class="tiny-gold">✦</span><span><strong>Justice, understood.</strong><small>Knowledge is the first step.</small></span></div>
+        </div>
+      </div>
+      <section class="section-wrap quick-search">
+        <div><span class="eyebrow">START HERE</span><h2>What can we help you understand?</h2><p>Describe your legal question in everyday language.</p></div>
+        <form id="homeQuestion" class="search-box"><span class="search-icon">⌕</span><input id="homeQuestionInput" placeholder="e.g. My landlord is not returning my deposit..." aria-label="Describe your legal question"><button class="button button-gold" type="submit">Explore options →</button></form>
+        <div class="topic-row"><span>Popular topics</span><a href="#assistant" data-prompt="What are my rights as a tenant in India?">Tenant rights</a><a href="#assistant" data-prompt="How can I file a consumer complaint in India?">Consumer complaints</a><a href="#assistant" data-prompt="What should I do if I am a victim of online fraud in India?">Cybercrime</a><a href="#assistant" data-prompt="Explain the basics of an employment dispute in India.">Employment</a></div>
+      </section>
+      <section class="section-wrap feature-section">
+        <div class="section-heading"><div><span class="eyebrow">YOUR LEGAL TOOLKIT</span><h2>One place. A clearer path forward.</h2></div><p>Practical tools to help you learn, organise and prepare.</p></div>
+        <div class="feature-grid">
+          <a class="feature-card" href="#assistant"><span class="feature-icon">✧</span><span class="card-arrow">↗</span><h3>AI Legal Assistant</h3><p>Explore legal concepts and possible next steps in plain language.</p><span class="card-link">Ask a question →</span></a>
+          <a class="feature-card" href="#laws"><span class="feature-icon">§</span><span class="card-arrow">↗</span><h3>Indian Law Library</h3><p>Find legal topics and follow links to authoritative resources.</p><span class="card-link">Explore laws →</span></a>
+          <a class="feature-card" href="#documents"><span class="feature-icon">▤</span><span class="card-arrow">↗</span><h3>Document Explainer</h3><p>Organise the text of a document and identify clauses to review.</p><span class="card-link">Review a document →</span></a>
+          <a class="feature-card" href="#drafts"><span class="feature-icon">✎</span><span class="card-arrow">↗</span><h3>Draft Generator</h3><p>Prepare a first draft of common letters and applications.</p><span class="card-link">Create a draft →</span></a>
+        </div>
+      </section>
+      <section class="section-wrap aid-banner"><div class="aid-symbol">⚖</div><div><span class="eyebrow">NEED HUMAN SUPPORT?</span><h2>Legal aid should be within reach.</h2><p>Explore official legal aid information and eligibility through India's legal services authorities.</p></div><a class="button button-outline" href="https://nalsa.gov.in/legal-aid/" target="_blank" rel="noopener noreferrer">Visit NALSA ↗</a></section>
+    </section>
+
+    <section class="page section-wrap inner-page" id="page-assistant" data-page="assistant">
+      <div class="page-intro"><span class="eyebrow">KANOON AI ASSISTANT</span><h1>Let's make the law <span>easier to understand.</span></h1><p>Ask a question about Indian law. The current version uses clearly labelled demo guidance and does not provide verified legal advice.</p></div>
+      <div class="chat-layout">
+        <aside class="side-panel"><h3>Explore a topic</h3><button class="topic-button" data-chat="What are the general steps to file a consumer complaint in India?">Consumer rights <span>→</span></button><button class="topic-button" data-chat="What documents are commonly useful for a rental deposit dispute?">Rent & housing <span>→</span></button><button class="topic-button" data-chat="What should I do immediately after noticing an online financial fraud in India?">Cyber safety <span>→</span></button><button class="topic-button" data-chat="What should I review before signing an employment agreement?">Employment <span>→</span></button><div class="mini-note">For urgent or case-specific matters, consult a qualified advocate.</div></aside>
+        <div class="chat-card"><div class="chat-head"><span class="online-dot"></span><div><strong>KANOON AI</strong><small>Indian legal information · Demo mode</small></div><span class="demo-pill">DEMO</span></div><div class="chat-messages" id="chatMessages"><div class="message assistant-message"><span class="message-avatar">K</span><div class="bubble"><strong>Namaste. How can I help?</strong><p>Describe your question in your own words. I can demonstrate how a legal information assistant might organise a response.</p><small>Demo guidance · Not verified legal advice</small></div></div></div><form id="chatForm" class="chat-input"><textarea id="chatInput" rows="2" placeholder="Type your legal question..." aria-label="Type your legal question"></textarea><button class="button button-gold" type="submit">Send ↑</button></form><div class="chat-foot">Please do not enter Aadhaar numbers, passwords, bank details or confidential case documents.</div></div>
+      </div>
+    </section>
+
+    <section class="page section-wrap inner-page" id="page-laws" data-page="laws">
+      <div class="page-intro"><span class="eyebrow">INDIAN LAW LIBRARY</span><h1>Start with a <span>trusted source.</span></h1><p>Browse a small starter directory of official Indian legal resources. This is a resource directory, not a complete or searchable legal database.</p></div>
+      <div class="law-search"><span>⌕</span><input id="lawSearch" placeholder="Search topics, acts or resources..." aria-label="Search law resources"><span id="lawCount" class="result-count">6 resources</span></div>
+      <div class="law-grid" id="lawGrid"></div>
+      <div class="notice"><strong>Source note:</strong> Always check the current text, amendments, commencement dates and applicable jurisdiction on the official source before relying on a provision.</div>
+    </section>
+
+    <section class="page section-wrap inner-page" id="page-documents" data-page="documents">
+      <div class="page-intro"><span class="eyebrow">DOCUMENT EXPLAINER</span><h1>Make sense of <span>legal paperwork.</span></h1><p>Paste non-confidential text to organise questions and clauses you may want to review. No file is uploaded or stored by this demo.</p></div>
+      <div class="tool-card"><label for="documentText">Document text</label><textarea id="documentText" class="large-textarea" rows="9" placeholder="Paste a non-confidential excerpt from a rental agreement, notice or contract..."></textarea><div class="tool-controls"><span id="documentLength">0 characters</span><button id="reviewDocument" class="button button-gold">Prepare review checklist →</button></div><div id="documentResult" class="result-panel hidden"></div><p class="privacy-note">Demo only: this tool does not analyse legal validity or determine your rights. Avoid pasting personal or confidential information.</p></div>
+    </section>
+
+    <section class="page section-wrap inner-page" id="page-drafts" data-page="drafts">
+      <div class="page-intro"><span class="eyebrow">FIRST-DRAFT WORKSPACE</span><h1>Put your concerns <span>into words.</span></h1><p>Create an editable starting point for a common letter. Review the content carefully before sending it.</p></div>
+      <form id="draftForm" class="tool-card form-grid">
+        <div class="field"><label for="draftType">Draft type</label><select id="draftType"><option value="consumer">Consumer complaint letter</option><option value="deposit">Rental deposit request</option><option value="records">Request for documents or records</option><option value="service">Service issue / refund request</option></select></div>
+        <div class="field"><label for="recipient">Recipient (optional)</label><input id="recipient" placeholder="e.g. Customer Support Manager"></div>
+        <div class="field full"><label for="issue">Describe the issue</label><textarea id="issue" rows="4" required placeholder="Explain what happened, relevant dates and what resolution you are requesting. Avoid sensitive personal details."></textarea></div>
+        <div class="field"><label for="resolution">Requested resolution</label><input id="resolution" placeholder="e.g. refund, written response"></div>
+        <div class="field"><label for="tone">Tone</label><select id="tone"><option>Polite and professional</option><option>Firm and formal</option></select></div>
+        <div class="full"><button class="button button-gold" type="submit">Generate sample draft →</button></div>
+        <div id="draftOutput" class="result-panel full hidden"></div>
+      </form>
+      <p class="privacy-note">This creates a general template, not a lawyer-reviewed notice. Do not use it for court filings or time-sensitive legal matters without qualified review.</p>
+    </section>
+
+    <section class="page section-wrap inner-page" id="page-signin" data-page="signin">
+      <div class="auth-card"><div class="auth-emblem">K<span>•</span></div><span class="eyebrow">WELCOME TO KANOON AI</span><h1>Make room for <span>clarity.</span></h1><p>This is the sign-in screen preview. Account creation will be enabled after Supabase authentication is configured.</p><form id="authForm"><label for="authEmail">Email address</label><input type="email" id="authEmail" placeholder="you@example.com" required><label for="authPassword">Password</label><input type="password" id="authPassword" placeholder="At least 8 characters" minlength="8" required><button class="button button-gold full-button" type="submit">Preview sign-in</button><div id="authMessage" class="inline-message" aria-live="polite"></div></form><small class="privacy-note">Do not use a real password on this demo screen. Authentication is not connected yet.</small></div>
+    </section>
+
+    <section class="page section-wrap inner-page" id="page-about" data-page="about">
+      <div class="page-intro"><span class="eyebrow">OUR PURPOSE</span><h1>Legal information, <span>with people in mind.</span></h1><p>KANOON AI is a project concept designed to make legal information easier to explore and understand, with an India-first focus.</p></div>
+      <div class="prose-card"><h2>What this platform aims to do</h2><p>Help people find relevant public legal resources, organise questions, understand common terminology and prepare for conversations with qualified legal professionals.</p><h2>What it does not do</h2><p>It does not replace an advocate, create an advocate-client relationship, guarantee outcomes, or determine the correct legal strategy for a particular case.</p><h2>Our source-first approach</h2><p>Future AI answers should point to official legislation, court websites and legal-services resources wherever possible, and state clearly when information has not been verified.</p></div>
+    </section>
+
+    <section class="page section-wrap inner-page" id="page-disclaimer" data-page="disclaimer">
+      <div class="page-intro"><span class="eyebrow">IMPORTANT INFORMATION</span><h1>Legal <span>disclaimer.</span></h1><p>Read this before using any information on the platform.</p></div>
+      <div class="prose-card"><h2>General information only</h2><p>Content displayed in this first milestone is general information and sample interface content. It is not legal advice, a legal opinion, or a substitute for advice from a qualified advocate familiar with your facts and jurisdiction.</p><h2>No guarantee of accuracy or completeness</h2><p>Laws and procedures change. Demo content may be incomplete and has not been verified for your specific situation. Independently confirm current legislation, amendments, rules, deadlines and court procedures through authoritative sources.</p><h2>Urgent matters</h2><p>If a deadline, arrest, threat, domestic violence, cybercrime, or other urgent issue is involved, contact the appropriate authorities or a qualified legal professional promptly.</p><h2>No confidential uploads in demo mode</h2><p>Do not submit confidential, identifying, financial or sensitive personal information. The demo tools do not provide secure document processing or user-specific storage.</p></div>
+    </section>
+
+    <section class="page section-wrap inner-page" id="page-privacy" data-page="privacy">
+      <div class="page-intro"><span class="eyebrow">YOUR INFORMATION</span><h1>Privacy <span>by design.</span></h1><p>This first milestone is a static demo. It does not connect to a database or an AI provider.</p></div>
+      <div class="prose-card"><h2>What this demo does</h2><p>Interactive examples run in your browser. This project code does not send the text you type in the demo chat, document explainer or draft generator to a project backend.</p><h2>Third-party services</h2><p>The page loads fonts from Google Fonts. Your browser may contact Google's servers to fetch them. You can remove the font imports from <code>public/index.html</code> if you prefer system fonts only.</p><h2>Future versions</h2><p>Before adding accounts, AI APIs, analytics or uploads, publish a complete privacy notice explaining what is collected, why it is used, retention, processors, deletion options and contact details. Secure all private records with access controls.</p></div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="footer-main"><a class="brand" href="#home"><span class="brand-mark">K<span>•</span></span><span><strong>KANOON <em>AI</em></strong><small>LEGAL INTELLIGENCE</small></span></a><p>Clarity starts with understanding.<br><small>Built for more accessible Indian legal information.</small></p><div class="footer-links"><a href="#about">About</a><a href="#disclaimer">Disclaimer</a><a href="#privacy">Privacy</a><a href="https://nalsa.gov.in/legal-aid/" target="_blank" rel="noopener noreferrer">Official legal aid ↗</a></div></div><div class="footer-bottom"><span>© <span id="year"></span> KANOON AI · Phase 1 preview</span><span>Not a substitute for professional legal advice.</span></div></footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>
