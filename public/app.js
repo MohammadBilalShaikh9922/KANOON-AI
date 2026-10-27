@@ -1,3 +1,4 @@
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
@@ -44,27 +45,18 @@ function safeHttpsUrl(value) {
 function normalizeAnswerText(value) {
   let text = String(value ?? "").replace(/\r\n?/g, "\n");
 
-  // Convert escaped newlines to actual newlines.
   text = text.replace(/\\n/g, "\n");
   text = text.replace(/\\r/g, "");
-
-  // Remove trailing escape characters from lines.
   text = text.replace(/[ \t]*\\+[ \t]*(?=\n|$)/g, "");
-
-  // Unescape common Markdown punctuation.
   text = text.replace(/\\([\\`*_{}\[\]()#+\-.!>:])/g, "$1");
-
-  // Remove remaining stray backslashes.
   text = text.replace(/\\/g, "");
 
-  // Keep links readable and safe as text.
   text = text.replace(
     /\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g,
     "$1 ($2)"
   );
 
-  // IMPORTANT: Keep Markdown heading markers here.
-  // renderAnswerHtml() needs them to identify headings.
+  // Preserve Markdown headings so renderAnswerHtml can recognize them.
 
   return text
     .replace(/[ \t]+\n/g, "\n")
@@ -72,8 +64,6 @@ function normalizeAnswerText(value) {
     .trim();
 }
 
-// Safely render headings, paragraphs, bold text, italics,
-// inline code, bullet lists and numbered lists.
 function renderAnswerHtml(value) {
   const text = normalizeAnswerText(value);
 
@@ -139,7 +129,6 @@ function renderAnswerHtml(value) {
       continue;
     }
 
-    // Recognize Markdown headings before processing other lines.
     const markdownHeading = line.match(/^#{1,6}\s+(.+)$/);
 
     if (markdownHeading) {
@@ -148,7 +137,6 @@ function renderAnswerHtml(value) {
       continue;
     }
 
-    // Recognize numbered headings, e.g. "1. Likely legal issue".
     const numberedHeading = line.match(/^\d+\.\s+(.{2,90})$/);
 
     const headingCandidate = numberedHeading
@@ -174,12 +162,10 @@ function renderAnswerHtml(value) {
       (isUppercaseHeading && !/^\d+[.)]\s/.test(line))
     ) {
       closeLists();
-
       output.push(`<h3>${formatInline(headingCandidate)}</h3>`);
       continue;
     }
 
-    // Bullet lists.
     const bullet = line.match(/^[-*•]\s+(.+)$/);
 
     if (bullet) {
@@ -197,7 +183,6 @@ function renderAnswerHtml(value) {
       continue;
     }
 
-    // Numbered lists.
     const numbered = line.match(/^\d+[.)]\s+(.+)$/);
 
     if (numbered) {
@@ -602,6 +587,104 @@ function addMessage(text, sender, label = "") {
 }
 
 // --------------------------------------------------
+// CLEAN CTRL+C COPYING FOR ASSISTANT ANSWERS
+// Copies readable plain text instead of Markdown.
+// Excludes interface labels inside the selected answer.
+// --------------------------------------------------
+
+document.addEventListener("copy", event => {
+  const selection = window.getSelection();
+
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  const startNode = range.startContainer;
+
+  const startElement =
+    startNode.nodeType === Node.ELEMENT_NODE
+      ? startNode
+      : startNode.parentElement;
+
+  const answerBubble = startElement?.closest(
+    ".assistant-message .bubble"
+  );
+
+  // Leave copying elsewhere on the page unchanged.
+  if (!answerBubble || !event.clipboardData) {
+    return;
+  }
+
+  const container = document.createElement("div");
+  container.appendChild(range.cloneContents());
+
+  // Exclude message labels and any interface controls.
+  container.querySelectorAll(
+    "button, input, textarea, select, script, style, small"
+  ).forEach(element => element.remove());
+
+  // Preserve visual line breaks in plain text.
+  container.querySelectorAll("br").forEach(element => {
+    element.replaceWith(document.createTextNode("\n"));
+  });
+
+  // Preserve heading separation.
+  container.querySelectorAll("h1, h2, h3, h4, h5, h6").forEach(heading => {
+    heading.insertAdjacentText("beforebegin", "\n\n");
+    heading.insertAdjacentText("afterend", "\n");
+  });
+
+  // Preserve list items with readable bullet or number markers.
+  container.querySelectorAll("li").forEach(item => {
+    const list = item.parentElement;
+    const isNumbered = list?.tagName === "OL";
+
+    const siblings = list
+      ? [...list.children].filter(child => child.tagName === "LI")
+      : [];
+
+    const index = siblings.indexOf(item);
+    const marker = isNumbered ? `${index + 1}. ` : "• ";
+
+    item.insertAdjacentText("beforebegin", "\n");
+    item.insertAdjacentText("afterbegin", marker);
+  });
+
+  // Preserve paragraph and block separation.
+  container.querySelectorAll("p, blockquote").forEach(element => {
+    element.insertAdjacentText("afterend", "\n");
+  });
+
+  const cleanText = (container.textContent || "")
+    // Remove Markdown heading prefixes.
+    .replace(/^[ \t]*#{1,6}[ \t]+/gm, "")
+    // Remove Markdown bold, italic and inline-code markers.
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)/g, "$1")
+    .replace(/(?<!_)_(?!\s)(.+?)(?<!\s)_(?!_)/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    // Convert any remaining raw Markdown links to readable text.
+    .replace(
+      /\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g,
+      "$1 ($2)"
+    )
+    // Convert raw Markdown bullet markers into plain-text bullets.
+    .replace(/^[ \t]*[-*][ \t]+/gm, "• ")
+    // Normalize whitespace without destroying paragraph spacing.
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (!cleanText) return;
+
+  event.preventDefault();
+  event.clipboardData.setData("text/plain", cleanText);
+});
+
+// --------------------------------------------------
 // OFFICIAL LEGAL RESOURCE LINKS
 // --------------------------------------------------
 
@@ -704,7 +787,6 @@ if (chatForm) {
     </span>
   `;
 
-  // Place the control above the chat form, never inside chatMessages.
   chatForm.parentNode.insertBefore(analyzerControl, chatForm);
 
   const analyzerButton = $("#toggleLegalAnalyzer");
