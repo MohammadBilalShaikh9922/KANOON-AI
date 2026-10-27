@@ -77,11 +77,10 @@ Always verify the applicable law, current procedures, and deadlines using author
 
 ### 1. Clone the repository
 
-Replace `YOUR_USERNAME` and `YOUR_REPOSITORY` with your actual GitHub repository details.
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/YOUR_REPOSITORY.git
-cd YOUR_REPOSITORY
+git clone https://github.com/MohammadBilalShaikh9922/KANOON-AI.git
+cd KANOON-AI
 ```
 
 ### 2. Configure Supabase
