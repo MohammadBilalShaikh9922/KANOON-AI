@@ -1,4 +1,3 @@
-
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
@@ -40,8 +39,8 @@ function safeHttpsUrl(value) {
 
 // --------------------------------------------------
 // SUPABASE CONFIGURATION
-// Public publishable key only — never use a secret key
-// or service_role key in frontend JavaScript.
+// Use only a publishable key in frontend JavaScript.
+// Never expose a service_role or secret key here.
 // --------------------------------------------------
 
 const SUPABASE_URL = "https://kjyeplfpthoqwxzkgzzb.supabase.co";
@@ -49,7 +48,6 @@ const SUPABASE_KEY = "sb_publishable_ciKRaCwZ8FCsE8shneFcjA_LBW6fmwR";
 
 // --------------------------------------------------
 // OFFICIAL FALLBACK LEGAL RESOURCE DIRECTORY
-// Displayed if the database is empty or unavailable.
 // --------------------------------------------------
 
 const fallbackLawResources = [
@@ -225,7 +223,6 @@ async function loadLawResources() {
       status.textContent =
         `Loaded ${lawResources.length} resources from the database.`;
     }
-
   } catch (error) {
     lawsLoadedFromSupabase = false;
     lawResources = [...fallbackLawResources];
@@ -245,10 +242,8 @@ async function loadLawResources() {
   renderLaws(searchInput ? searchInput.value : "");
 }
 
-// Render useful fallback links immediately.
+// Render fallback links immediately, then load database resources.
 renderLaws();
-
-// Load database resources without blocking the rest of the website.
 loadLawResources();
 
 // --------------------------------------------------
@@ -378,15 +373,13 @@ if (lawSearch) {
 }
 
 // --------------------------------------------------
-
-/* --------------------------------------------------
-   LIVE AI LEGAL ASSISTANT
-   Calls the same-origin Cloudflare Worker API.
--------------------------------------------------- */
+// LIVE AI LEGAL ASSISTANT
+// Calls the same-origin Cloudflare Worker API.
+// --------------------------------------------------
 
 function addMessage(text, sender, label = "") {
   const messages = $("#chatMessages");
-  if (!messages) return;
+  if (!messages) return null;
 
   const item = document.createElement("div");
 
@@ -407,6 +400,58 @@ function addMessage(text, sender, label = "") {
   `;
 
   messages.appendChild(item);
+  messages.scrollTop = messages.scrollHeight;
+
+  return item;
+}
+
+function addOfficialSources(sources) {
+  const messages = $("#chatMessages");
+  if (!messages || !Array.isArray(sources) || sources.length === 0) {
+    return;
+  }
+
+  // Validate source data before creating links.
+  const safeSources = sources
+    .filter(source =>
+      source &&
+      typeof source.title === "string" &&
+      typeof source.url === "string"
+    )
+    .map(source => ({
+      title: source.title.trim(),
+      url: safeHttpsUrl(source.url)
+    }))
+    .filter(source => source.title && source.url);
+
+  if (safeSources.length === 0) return;
+
+  const sourceBox = document.createElement("div");
+  sourceBox.className = "message assistant-message";
+
+  const linksHtml = safeSources.map(source => `
+    <li>
+      <a
+        href="${escapeHtml(source.url)}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >${escapeHtml(source.title)} ↗</a>
+    </li>
+  `).join("");
+
+  sourceBox.innerHTML = `
+    <span class="message-avatar">K</span>
+    <div class="bubble">
+      <strong>Official legal resources</strong>
+      <ul>${linksHtml}</ul>
+      <small>
+        These are relevant resource links, not confirmation that
+        the AI checked or relied on each source for this answer.
+      </small>
+    </div>
+  `;
+
+  messages.appendChild(sourceBox);
   messages.scrollTop = messages.scrollHeight;
 }
 
@@ -452,13 +497,13 @@ if (chatForm) {
       return;
     }
 
-    const submitButton = chatForm.querySelector(
-      'button[type="submit"], button:not([type])'
-    );
-
     if (chatForm.dataset.requestPending === "true") {
       return;
     }
+
+    const submitButton = chatForm.querySelector(
+      'button[type="submit"], button:not([type])'
+    );
 
     chatForm.dataset.requestPending = "true";
 
@@ -519,6 +564,10 @@ if (chatForm) {
         "AI-GENERATED · NOT VERIFIED LEGAL ADVICE"
       );
 
+      // Display source links supplied by the Worker API.
+      // The backend must return a `sources` array for links to appear.
+      addOfficialSources(data.sources);
+
     } catch (error) {
       if (loadingMessage) {
         loadingMessage.remove();
@@ -544,18 +593,10 @@ if (chatForm) {
   });
 }
 
-// Suggested topic buttons in the assistant sidebar.
-$$("[data-chat]").forEach(button => {
-  button.addEventListener("click", () => {
-    const input = $("#chatInput");
-    if (!input) return;
+// --------------------------------------------------
+// SUGGESTED TOPIC BUTTONS
+// --------------------------------------------------
 
-    input.value = button.dataset.chat || "";
-    input.focus();
-  });
-});
-
-// Suggested topic buttons in the assistant sidebar.
 $$("[data-chat]").forEach(button => {
   button.addEventListener("click", () => {
     const input = $("#chatInput");
