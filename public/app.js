@@ -3,6 +3,10 @@ const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
 let toastTimer;
 
+// --------------------------------------------------
+// NOTIFICATIONS
+// --------------------------------------------------
+
 function toast(message) {
   const el = $("#toast");
   if (!el) return;
@@ -37,44 +41,39 @@ function safeHttpsUrl(value) {
   }
 }
 
-// Normalize escaped text returned by an API or language model.
 function normalizeAnswerText(value) {
   let text = String(value ?? "").replace(/\r\n?/g, "\n");
 
-  // Convert literal escaped newlines into actual line breaks.
+  // Convert escaped newlines to actual newlines.
   text = text.replace(/\\n/g, "\n");
   text = text.replace(/\\r/g, "");
 
-  // Remove backslashes left at the end of lines.
+  // Remove trailing escape characters from lines.
   text = text.replace(/[ \t]*\\+[ \t]*(?=\n|$)/g, "");
 
-  // Unescape Markdown punctuation, including escaped list markers.
+  // Unescape common Markdown punctuation.
   text = text.replace(/\\([\\`*_{}\[\]()#+\-.!>:])/g, "$1");
 
-  // Remove any remaining formatting-related backslashes.
+  // Remove remaining stray backslashes.
   text = text.replace(/\\/g, "");
 
-  // Convert Markdown links into readable, safe plain-text links.
+  // Keep links readable and safe as text.
   text = text.replace(
     /\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g,
     "$1 ($2)"
   );
 
-  // Remove Markdown heading markers while retaining the heading text.
-  text = text.replace(/^[ \t]*#{1,6}[ \t]+/gm, "");
+  // IMPORTANT: Keep Markdown heading markers here.
+  // renderAnswerHtml() needs them to identify headings.
 
-  // Remove stray backslashes after the transformations.
-  text = text.replace(/[ \t]*\\+[ \t]*(?=\n|$)/g, "");
-
-  // Avoid excessive blank lines and trailing spaces.
   return text
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-// Safely format plain text, headings, bold text and lists.
-// All model-provided HTML is escaped before rendering.
+// Safely render headings, paragraphs, bold text, italics,
+// inline code, bullet lists and numbered lists.
 function renderAnswerHtml(value) {
   const text = normalizeAnswerText(value);
 
@@ -98,14 +97,11 @@ function renderAnswerHtml(value) {
     }
   }
 
-  function formatInline(line) {
-    let safe = escapeHtml(line);
+  function formatInline(value) {
+    let safe = escapeHtml(value);
 
-    // Format bold text only after escaping HTML.
     safe = safe.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
     safe = safe.replace(/\*(.+?)\*/g, "<em>$1</em>");
-
-    // Format inline code safely.
     safe = safe.replace(/`([^`]+)`/g, "<code>$1</code>");
 
     return safe;
@@ -126,7 +122,13 @@ function renderAnswerHtml(value) {
     "POSSIBLE OPTIONS",
     "NEXT STEPS",
     "IMPORTANT NOTES",
-    "CONCLUSION"
+    "CONCLUSION",
+    "FACTS TO CLARIFY",
+    "POSSIBLE LEGAL ISSUES",
+    "RELEVANT DOCUMENTS",
+    "PRACTICAL OPTIONS",
+    "LIMITATIONS",
+    "GENERAL INFORMATION"
   ]);
 
   for (const rawLine of lines) {
@@ -137,48 +139,47 @@ function renderAnswerHtml(value) {
       continue;
     }
 
-    // Recognize numbered headings such as "1. Likely legal issue".
-    const numberedHeading = line.match(
-      /^\d+\.\s+(.{2,90})$/
-    );
+    // Recognize Markdown headings before processing other lines.
+    const markdownHeading = line.match(/^#{1,6}\s+(.+)$/);
+
+    if (markdownHeading) {
+      closeLists();
+      output.push(`<h3>${formatInline(markdownHeading[1])}</h3>`);
+      continue;
+    }
+
+    // Recognize numbered headings, e.g. "1. Likely legal issue".
+    const numberedHeading = line.match(/^\d+\.\s+(.{2,90})$/);
 
     const headingCandidate = numberedHeading
       ? numberedHeading[1].trim()
       : line;
 
+    const plainHeading = headingCandidate
+      .replace(/\*\*/g, "")
+      .replace(/:$/, "")
+      .trim();
+
     const isKnownHeading = knownHeadings.has(
-      headingCandidate
-        .replace(/\*\*/g, "")
-        .replace(/:$/, "")
-        .toUpperCase()
+      plainHeading.toUpperCase()
     );
 
     const isUppercaseHeading =
-      headingCandidate.length <= 90 &&
-      /^[A-Z0-9][A-Z0-9 &'(),/–—-]*:?$/.test(
-        headingCandidate.replace(/\*\*/g, "")
-      ) &&
-      /[A-Z]/.test(headingCandidate);
-
-    const isMarkdownHeading = /^#{1,6}\s+/.test(rawLine);
+      plainHeading.length <= 90 &&
+      /^[A-Z0-9][A-Z0-9 &'(),/–—-]*:?$/.test(plainHeading) &&
+      /[A-Z]/.test(plainHeading);
 
     if (
-      isMarkdownHeading ||
       isKnownHeading ||
-      (isUppercaseHeading && !/^\d+\./.test(line))
+      (isUppercaseHeading && !/^\d+[.)]\s/.test(line))
     ) {
       closeLists();
 
-      const headingText = line
-        .replace(/^#{1,6}\s+/, "")
-        .replace(/\\+$/, "")
-        .trim();
-
-      output.push(`<h3>${formatInline(headingText)}</h3>`);
+      output.push(`<h3>${formatInline(headingCandidate)}</h3>`);
       continue;
     }
 
-    // Bullet list items: -, *, or •.
+    // Bullet lists.
     const bullet = line.match(/^[-*•]\s+(.+)$/);
 
     if (bullet) {
@@ -196,7 +197,7 @@ function renderAnswerHtml(value) {
       continue;
     }
 
-    // Numbered list items: "1. Item" or "1) Item".
+    // Numbered lists.
     const numbered = line.match(/^\d+[.)]\s+(.+)$/);
 
     if (numbered) {
@@ -215,8 +216,6 @@ function renderAnswerHtml(value) {
     }
 
     closeLists();
-
-    // Preserve readable paragraph spacing without raw HTML.
     output.push(`<p>${formatInline(line)}</p>`);
   }
 
@@ -251,12 +250,15 @@ function removeTrailingDisclaimer(value) {
 
 // --------------------------------------------------
 // SUPABASE CONFIGURATION
-// Use only the publishable key in frontend JavaScript.
+// Only the publishable key belongs in frontend code.
 // Never put a service_role or secret key here.
 // --------------------------------------------------
 
-const SUPABASE_URL = "https://kjyeplfpthoqwxzkgzzb.supabase.co";
-const SUPABASE_KEY = "sb_publishable_ciKRaCwZ8FCsE8shneFcjA_LBW6fmwR";
+const SUPABASE_URL =
+  "https://kjyeplfpthoqwxzkgzzb.supabase.co";
+
+const SUPABASE_KEY =
+  "sb_publishable_ciKRaCwZ8FCsE8shneFcjA_LBW6fmwR";
 
 // --------------------------------------------------
 // OFFICIAL FALLBACK LEGAL RESOURCE DIRECTORY
@@ -308,7 +310,6 @@ const fallbackLawResources = [
 ];
 
 let lawResources = [...fallbackLawResources];
-let lawsLoadedFromSupabase = false;
 
 function renderLaws(filter = "") {
   const grid = $("#lawGrid");
@@ -414,7 +415,6 @@ async function loadLawResources() {
     }
 
     lawResources = databaseResources;
-    lawsLoadedFromSupabase = true;
 
     console.info(
       `KANOON AI: Loaded ${lawResources.length} resources from Supabase.`
@@ -425,7 +425,6 @@ async function loadLawResources() {
         `Loaded ${lawResources.length} resources from the database.`;
     }
   } catch (error) {
-    lawsLoadedFromSupabase = false;
     lawResources = [...fallbackLawResources];
 
     console.warn(
@@ -677,7 +676,7 @@ function addLoadingMessage() {
 
 // --------------------------------------------------
 // LEGAL ISSUE ANALYZER CONTROL
-// Injected into the existing page so no HTML change is needed.
+// Kept outside the chat message history.
 // --------------------------------------------------
 
 let legalAnalyzerEnabled = false;
@@ -690,7 +689,7 @@ if (chatForm) {
   analyzerControl.id = "legalAnalyzerControl";
   analyzerControl.style.cssText =
     "display:flex;align-items:center;gap:12px;flex-wrap:wrap;" +
-    "padding:12px 14px;margin:0 0 12px;border:1px solid #d9bd78;" +
+    "padding:12px 14px;margin:12px 0;border:1px solid #d9bd78;" +
     "border-radius:12px;background:rgba(212,175,55,0.08);";
 
   analyzerControl.innerHTML = `
@@ -705,6 +704,7 @@ if (chatForm) {
     </span>
   `;
 
+  // Place the control above the chat form, never inside chatMessages.
   chatForm.parentNode.insertBefore(analyzerControl, chatForm);
 
   const analyzerButton = $("#toggleLegalAnalyzer");
@@ -967,7 +967,7 @@ if (draftForm) {
       consumer: "Consumer grievance and request for resolution",
       deposit: "Request for return of rental security deposit",
       records: "Request for copies of relevant documents or records",
-      service: "Service concern and request for resolution"
+      service: "Service issue and refund request"
     };
 
     const opening =
