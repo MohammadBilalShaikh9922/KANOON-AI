@@ -38,36 +38,63 @@ function safeHttpsUrl(value) {
   }
 }
 
-// Clean escaped Markdown and line breaks without interpreting
-// answer text as HTML or executable content.
+// Normalize real and escaped newlines, escaped Markdown punctuation,
+// and common formatting artifacts from AI-generated answers.
 function normalizeAnswerText(value) {
-  return String(value || "")
-    .replace(/\\+[ \t]*\r?\n/g, "\n")
-    .replace(/\r\n?/g, "\n")
-    .replace(/\\([\\`*_{}\[\]()#+\-.!>])/g, "$1")
+  let text = String(value ?? "").replace(/\r\n?/g, "\n");
+
+  // Convert backslash + real newline and literal escaped "\n"
+  // into normal line breaks.
+  text = text.replace(/\\+(?:[ \t]*\n|n)/g, "\n");
+
+  // Remove Markdown escaping, including escaped list punctuation.
+  text = text.replace(/\\([\\`*_{}\[\]()#+\-.!>])/g, "$1");
+
+  // Fix numbered lists such as "1\." and "2\.".
+  text = text.replace(/(^|\n)([ \t]*\d+)\\\./g, "$1$2.");
+
+  // Remove any remaining stray backslashes from formatted answers.
+  text = text.replace(/\\/g, "");
+
+  // Make common Markdown formatting readable as plain text.
+  text = text
     .replace(/^[ \t]*#{1,6}[ \t]+/gm, "")
     .replace(/\*\*(.*?)\*\*/gs, "$1")
-    .replace(/^[ \t]*\*[ \t]+/gm, "- ")
+    .replace(/(^|\n)[ \t]*\*[ \t]+/g, "$1- ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+
+  return text;
 }
 
-// Remove a repeated closing disclaimer from the answer.
-// The interface displays one consistent disclaimer separately.
+// Remove known closing disclaimers so the interface can display
+// one consistent disclaimer without duplicating the answer's ending.
 function removeTrailingDisclaimer(value) {
   let answer = normalizeAnswerText(value);
 
   const disclaimerPatterns = [
-    /\n*\s*This is general legal information, not case-specific legal advice\.?(?:\s*For advice about your particular dispute, consult a qualified Indian advocate\.?)?\s*$/i,
-    /\n*\s*This is general legal information\.?(?:\s*Check the official website for current service details\.?)?\s*$/i,
-    /\n*\s*This is general legal information, not case-specific legal advice\.?(?:\s*Consult a qualified Maharashtra advocate for advice about your particular situation\.?)?\s*$/i,
-    /\n*\s*General legal information only; not verified legal advice\.?(?:\s*The listed links are official reference resources selected by topic\.?)?(?:\s*They were not necessarily opened or consulted to generate this answer\.?)?(?:\s*Check current law and consult a qualified lawyer for advice about your specific situation\.?)?\s*$/i
+    /(?:\s*This is general legal information, not case-specific legal advice\.?)(?:\s*Consult a qualified Indian advocate for advice about your particular dispute\.?)?\s*$/i,
+
+    /(?:\s*This is general legal information\.?)(?:\s*Check the official website for current service details\.?)?\s*$/i,
+
+    /(?:\s*This is general legal information, not case-specific legal advice\.?)(?:\s*Consult a qualified Maharashtra advocate for advice about your particular situation\.?)?\s*$/i,
+
+    /(?:\s*General legal information only; not verified legal advice\.?)(?:\s*The listed links are official reference resources selected by topic\.?)?(?:\s*They were not necessarily opened or consulted to generate this answer\.?)?(?:\s*Check current law and consult a qualified lawyer for advice about your specific situation\.?)?\s*$/i,
+
+    /(?:\s*General legal information only; not case-specific legal advice\.?)\s*$/i
   ];
 
-  for (const pattern of disclaimerPatterns) {
-    answer = answer.replace(pattern, "").trim();
-  }
+  // Repeat because an answer may end with more than one disclaimer.
+  let previousAnswer;
+
+  do {
+    previousAnswer = answer;
+
+    for (const pattern of disclaimerPatterns) {
+      answer = answer.replace(pattern, "").trim();
+    }
+  } while (answer !== previousAnswer);
 
   return answer;
 }
@@ -421,8 +448,8 @@ function addMessage(text, sender, label = "") {
     ? ""
     : '<span class="message-avatar">K</span>';
 
-  // Normalize first, escape second. This preserves safe plain text
-  // while converting actual newlines to visual line breaks.
+  // Escape content before inserting it into the page.
+  // Newlines are converted to <br> only after HTML escaping.
   const displayText = normalizeAnswerText(text);
 
   item.innerHTML = `
@@ -596,15 +623,15 @@ if (chatForm) {
         loadingMessage.remove();
       }
 
-      // Remove escaped Markdown and repeated closing disclaimers.
+      // Strip formatting artifacts and known trailing disclaimers.
       const answer = removeTrailingDisclaimer(data.answer);
 
       if (!answer) {
         throw new Error("The AI returned an empty answer after formatting.");
       }
 
-      // Display one concise disclaimer, not both the answer's own
-      // disclaimer and the long backend disclaimer.
+      // Display one concise disclaimer in the answer.
+      // Do not append the backend disclaimer a second time.
       const singleDisclaimer =
         "General legal information only; not case-specific legal advice.";
 
