@@ -1,72 +1,69 @@
+
 const MODEL = "@cf/meta/llama-3.2-1b-instruct";
 
 const SYSTEM_PROMPT = `
 You are KANOON AI, an Indian legal information assistant.
 
-Provide cautious, practical and accurate general legal information.
-Never invent laws, section numbers, court judgments, legal authorities,
-complaint portals, phone numbers, deadlines or URLs.
+Provide cautious, practical general legal information in plain English.
 
-ACCURACY RULES
+LEGAL ACCURACY RULES
 
-1. The principal Indian consumer-protection statute is the Consumer
-   Protection Act, 2019, subject to applicable amendments and rules.
-
-2. Never invent a legal organisation or complaint website. Do not
-   recommend a supposed Consumer Dispute Resolution Forum (CDRF).
-
-3. For ordinary refund disputes, do not recommend the Competition
-   Commission of India unless the facts raise a relevant competition
+1. Never invent statutes, section numbers, judgments, authorities,
+   websites, phone numbers, deadlines, or legal procedures.
+2. If a fact depends on the user's state, dates, documents, or case
+   details, explain what needs to be checked.
+3. Never guarantee a legal outcome, refund, or court decision.
+4. Do not claim to have browsed a website, read a legal document,
+   checked a database, or verified current law unless that actually
+   happened during this request.
+5. The Consumer Protection Act, 2019 is an important central
+   consumer-protection statute. Applicable rules and amendments
+   may also matter.
+6. The National Consumer Helpline is a pre-litigation grievance
+   mechanism. It does not guarantee a particular outcome.
+7. Do not recommend a fictional organisation called a
+   "Consumer Dispute Resolution Forum".
+8. Do not recommend the Competition Commission of India for an
+   ordinary refund dispute without facts suggesting a competition
    law issue.
-
-4. The National Consumer Helpline is a pre-litigation grievance
-   mechanism. Its official website is:
-   https://consumerhelpline.gov.in/public/
-   Its official contact page is:
-   https://consumerhelpline.gov.in/public/contact
-
-5. The published National Consumer Helpline numbers are 1915 and
-   1800-11-4000. Do not guarantee a refund or successful complaint.
-
-6. The Consumer Protection Act, 2019 is available through India Code:
-   https://www.indiacode.nic.in/
-
-7. Do not claim to have searched, opened or verified a source unless
-   a research tool actually did so during this conversation.
-
-8. If you do not know a legal detail, say it needs verification.
-   Never guess a limitation period, jurisdiction or legal provision.
+9. Never request passwords, OTPs, bank PINs, or other credentials.
+10. If uncertain, say so instead of guessing.
 
 RESPONSE STYLE
 
-- Answer the question directly in plain, simple text.
-- Use numbered steps when helpful.
-- Avoid Markdown formatting, HTML and code formatting.
-- Do not output escaped Markdown or literal formatting sequences.
-- Do not invent facts or claim that a source endorses your answer.
-- Ask a concise clarifying question when important facts are missing.
-- Protect the user's private information.
-- End with a reminder that the response is general legal information,
+- Answer the user's question directly.
+- Use simple language and numbered steps where helpful.
+- Avoid unnecessary legal jargon and invented citations.
+- Ask a short clarifying question when essential facts are missing.
+- Distinguish general information from advice for a particular case.
+- Explain when a qualified Indian advocate or legal-aid service
+  may be appropriate.
+- End with a brief reminder that this is general legal information,
   not case-specific legal advice.
-
-For urgent, complex or high-risk matters, suggest consulting a
-qualified Indian advocate or appropriate legal-aid service.
 `;
 
-const VERIFIED_SOURCES = [
-  {
+const SOURCES = {
+  consumerAct: {
     title: "Consumer Protection Act, 2019 — India Code",
     url: "https://www.indiacode.nic.in/bitstream/123456789/15256/1/eng201935.pdf"
   },
-  {
+  indiaCode: {
+    title: "India Code — Official legislation repository",
+    url: "https://www.indiacode.nic.in/"
+  },
+  consumerHelpline: {
     title: "National Consumer Helpline — Government of India",
     url: "https://consumerhelpline.gov.in/public/"
   },
-  {
+  consumerContact: {
     title: "National Consumer Helpline — Contact Details",
     url: "https://consumerhelpline.gov.in/public/contact"
+  },
+  maharashtraRent: {
+    title: "Maharashtra Rent Control Act, 1999 — Maharashtra Government",
+    url: "https://lj.maharashtra.gov.in/en/document/the-maharashtra-rent-control-act-1999-text-as-on-7th-march-2025-2/"
   }
-];
+};
 
 function jsonResponse(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -78,7 +75,6 @@ function jsonResponse(data, status = 200) {
     }
   });
 }
-
 
 function cleanModelAnswer(value) {
   return String(value || "")
@@ -94,9 +90,8 @@ function cleanModelAnswer(value) {
     .trim();
 }
 
-
 function isConsumerQuestion(message) {
-  return /\b(consumer|refund|defective|damaged|faulty|seller|product|marketplace|e-commerce|ecommerce|consumer protection|consumer commission|return policy)\b/i.test(
+  return /\b(consumer|refund|defective|damaged|faulty|seller|product|marketplace|e-commerce|ecommerce|consumer protection|consumer commission|return policy|online shopping)\b/i.test(
     message
   );
 }
@@ -115,31 +110,129 @@ function isDefectiveRefundQuestion(message) {
   return mentionsProductOrSeller && mentionsRefundProblem;
 }
 
+function isNCHQuestion(message) {
+  return /\b(national consumer helpline|consumer helpline|1915|1800[\s-]*11[\s-]*4000)\b/i.test(
+    message
+  );
+}
+
+function isMaharashtraRentalQuestion(message) {
+  const mentionsRental =
+    /\b(rental agreement|rent agreement|lease agreement|tenancy agreement|landlord|tenant|leave and licence|leave and license|leave-and-licence|leave-and-license)\b/i.test(
+      message
+    );
+
+  const mentionsMaharashtra =
+    /\b(maharashtra|mumbai|pune|thane|nagpur|nashik)\b/i.test(
+      message
+    );
+
+  return mentionsRental && mentionsMaharashtra;
+}
+
 function getDefectiveRefundAnswer() {
-  return `If an online seller refuses to refund a defective product in India, take these steps:
+  return `If an online seller refuses to refund a defective product in India, consider these steps:
 
-1. Keep your evidence. Save the invoice, order confirmation, payment receipt, photographs or videos showing the defect, warranty details, return policy and messages with the seller.
+1. Preserve your evidence. Keep the invoice, order confirmation, payment receipt, photographs or videos showing the defect, warranty details, return policy, and messages with the seller.
 
-2. Complain to the seller in writing. Explain the defect, when you received the product and what resolution you are requesting. Keep a copy of the complaint and any response.
+2. Contact the seller in writing. Describe the defect, when you received the product, and the resolution you want. Keep copies of your complaint and the response.
 
-3. Contact the shopping platform if you bought the product through a marketplace. Use its official customer-support or grievance process and keep the complaint reference number.
+3. If you purchased through an online marketplace, use its official customer-support or grievance process. Save the complaint reference number.
 
-4. Check the return policy and applicable warranty. Your available remedies depend on the facts, the terms of sale and applicable law.
+4. Check the applicable return policy, warranty, and terms of sale. The remedies available depend on the circumstances and applicable law.
 
-5. If the matter remains unresolved, consider registering a grievance with the National Consumer Helpline at https://consumerhelpline.gov.in/public/ or by calling 1915 or 1800-11-4000. This is a pre-litigation grievance mechanism; it does not guarantee a refund.
+5. If unresolved, consider contacting the National Consumer Helpline through its official website: https://consumerhelpline.gov.in/public/
 
-6. If the dispute remains unresolved, you may consider approaching the appropriate Consumer Disputes Redressal Commission. The correct forum and filing procedure depend on your circumstances and applicable rules, so verify them before filing.
+The published telephone numbers are 1915 and 1800-11-4000. Published telephone hours are 8 AM to 8 PM, excluding national holidays. The helpline is a pre-litigation grievance mechanism and does not guarantee a refund.
 
-Keep communications factual and respectful. Do not share passwords, OTPs or bank credentials when pursuing a complaint.
+6. If the dispute remains unresolved, consider the appropriate Consumer Disputes Redressal Commission. Check the current filing process and the forum applicable to your case before proceeding.
 
-This is general legal information, not case-specific legal advice. For advice about your particular dispute, consult a qualified Indian advocate.`;
+Keep your complaint factual. Do not share passwords, OTPs, or banking credentials.
+
+This is general legal information, not case-specific legal advice. Consult a qualified Indian advocate for advice about your particular dispute.`;
+}
+
+function getNCHAnswer() {
+  return `The National Consumer Helpline (NCH) is a Government of India service through which consumers can raise grievances at the pre-litigation stage.
+
+Official website:
+https://consumerhelpline.gov.in/public/
+
+Published telephone numbers:
+1915
+1800-11-4000
+
+The official contact page lists telephone service from 8 AM to 8 PM, daily except national holidays. It also lists online grievance registration and other contact options.
+
+Steps to consider:
+
+1. Gather your invoice, order details, payment proof, and correspondence.
+2. Visit the official NCH website.
+3. Follow the current registration and grievance-submission instructions.
+4. Save your complaint reference number and any replies.
+
+NCH does not guarantee that a seller will issue a refund or that every grievance will be resolved. If the matter remains unresolved, you may need to consider the appropriate legal remedy.
+
+Official contact details:
+https://consumerhelpline.gov.in/public/contact
+
+This is general legal information, not case-specific legal advice. Check the official website for current service details.`;
+}
+
+function getMaharashtraRentalAnswer() {
+  return `Before signing a rental or leave-and-licence agreement in Maharashtra, consider these checks:
+
+1. Verify the landlord's identity and authority to rent or license the property.
+
+2. Confirm the property address, premises included, parking arrangements, and any shared facilities.
+
+3. Read the financial terms carefully, including rent, deposit, payment dates, maintenance charges, utility bills, and other fees. Obtain receipts for payments.
+
+4. Review the agreement duration, renewal terms, notice period, termination conditions, and any agreed charges.
+
+5. Record the property's condition with dated photographs. Clarify responsibility for repairs and maintenance in writing.
+
+6. Read every clause before signing. Make sure important promises and conditions are recorded in the agreement.
+
+7. Check the legal requirements for your particular arrangement. Section 55 of the Maharashtra Rent Control Act, 1999 addresses written and registered agreements for letting premises or leave-and-licence arrangements covered by that section. Do not assume the same requirements apply identically to every arrangement; verify the applicable law and current amendments.
+
+8. Keep a signed copy of the agreement, payment receipts, registration details where applicable, and related communications.
+
+Official Maharashtra government reference:
+https://lj.maharashtra.gov.in/en/document/the-maharashtra-rent-control-act-1999-text-as-on-7th-march-2025-2/
+
+If there is a dispute, an unusual clause, or uncertainty about registration requirements, consult a qualified Maharashtra advocate.
+
+This is general legal information, not case-specific legal advice.`;
+}
+
+function getReferenceSources(message) {
+  if (isMaharashtraRentalQuestion(message)) {
+    return [SOURCES.maharashtraRent];
+  }
+
+  if (isNCHQuestion(message)) {
+    return [
+      SOURCES.consumerHelpline,
+      SOURCES.consumerContact
+    ];
+  }
+
+  if (isConsumerQuestion(message)) {
+    return [
+      SOURCES.consumerAct,
+      SOURCES.consumerHelpline,
+      SOURCES.consumerContact
+    ];
+  }
+
+  return [];
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // AI chat API
     if (url.pathname === "/api/chat") {
       if (request.method !== "POST") {
         return jsonResponse(
@@ -148,7 +241,6 @@ export default {
         );
       }
 
-      // Accept requests from this website's own origin only.
       const origin = request.headers.get("Origin");
 
       if (origin && origin !== url.origin) {
@@ -208,11 +300,17 @@ export default {
 
       try {
         let answer;
+        let answerType = "ai_generated";
 
-        // Use a predefined answer for common defective-product
-        // refund disputes instead of relying on the small AI model.
-        if (isDefectiveRefundQuestion(message)) {
+        if (isMaharashtraRentalQuestion(message)) {
+          answer = getMaharashtraRentalAnswer();
+          answerType = "predefined_general_information";
+        } else if (isNCHQuestion(message)) {
+          answer = getNCHAnswer();
+          answerType = "predefined_general_information";
+        } else if (isDefectiveRefundQuestion(message)) {
           answer = getDefectiveRefundAnswer();
+          answerType = "predefined_general_information";
         } else {
           const result = await env.AI.run(MODEL, {
             messages: [
@@ -245,16 +343,16 @@ export default {
           );
         }
 
-        const consumerQuestion = isConsumerQuestion(message);
+        const referenceSources = getReferenceSources(message);
 
         return jsonResponse({
           answer,
+          answerType,
           disclaimer:
-            "AI-generated general information, not verified legal advice. Verify applicable law and consult a qualified lawyer for advice about your specific situation.",
-          sources: consumerQuestion ? VERIFIED_SOURCES : []
+            "General legal information only; not verified legal advice. The listed links are official reference resources selected by topic. They were not necessarily opened or consulted to generate this answer. Check current law and consult a qualified lawyer for advice about your specific situation.",
+          sources: referenceSources
         });
       } catch (error) {
-        // Keep internal errors out of the public response.
         console.error(
           "KANOON AI inference failed:",
           error?.message || "Unknown error"
@@ -270,15 +368,17 @@ export default {
       }
     }
 
-    // Preserve static website delivery.
     if (request.method !== "GET" && request.method !== "HEAD") {
-      return new Response("Method not allowed", { status: 405 });
+      return new Response("Method not allowed", {
+        status: 405
+      });
     }
 
     if (!env.ASSETS) {
-      return new Response("Website assets are not configured.", {
-        status: 503
-      });
+      return new Response(
+        "Website assets are not configured.",
+        { status: 503 }
+      );
     }
 
     return env.ASSETS.fetch(request);
