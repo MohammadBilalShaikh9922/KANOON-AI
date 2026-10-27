@@ -1,3 +1,4 @@
+
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 
@@ -15,7 +16,7 @@ function toast(message) {
 }
 
 // --------------------------------------------------
-// SAFE HTML AND URL HELPERS
+// SAFE HTML, URL AND ANSWER HELPERS
 // --------------------------------------------------
 
 function escapeHtml(value) {
@@ -37,10 +38,44 @@ function safeHttpsUrl(value) {
   }
 }
 
+// Clean escaped Markdown and line breaks without interpreting
+// answer text as HTML or executable content.
+function normalizeAnswerText(value) {
+  return String(value || "")
+    .replace(/\\+[ \t]*\r?\n/g, "\n")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\\([\\`*_{}\[\]()#+\-.!>])/g, "$1")
+    .replace(/^[ \t]*#{1,6}[ \t]+/gm, "")
+    .replace(/\*\*(.*?)\*\*/gs, "$1")
+    .replace(/^[ \t]*\*[ \t]+/gm, "- ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Remove a repeated closing disclaimer from the answer.
+// The interface displays one consistent disclaimer separately.
+function removeTrailingDisclaimer(value) {
+  let answer = normalizeAnswerText(value);
+
+  const disclaimerPatterns = [
+    /\n*\s*This is general legal information, not case-specific legal advice\.?(?:\s*For advice about your particular dispute, consult a qualified Indian advocate\.?)?\s*$/i,
+    /\n*\s*This is general legal information\.?(?:\s*Check the official website for current service details\.?)?\s*$/i,
+    /\n*\s*This is general legal information, not case-specific legal advice\.?(?:\s*Consult a qualified Maharashtra advocate for advice about your particular situation\.?)?\s*$/i,
+    /\n*\s*General legal information only; not verified legal advice\.?(?:\s*The listed links are official reference resources selected by topic\.?)?(?:\s*They were not necessarily opened or consulted to generate this answer\.?)?(?:\s*Check current law and consult a qualified lawyer for advice about your specific situation\.?)?\s*$/i
+  ];
+
+  for (const pattern of disclaimerPatterns) {
+    answer = answer.replace(pattern, "").trim();
+  }
+
+  return answer;
+}
+
 // --------------------------------------------------
 // SUPABASE CONFIGURATION
-// Use only a publishable key in frontend JavaScript.
-// Never expose a service_role or secret key here.
+// Only a publishable key belongs in frontend JavaScript.
+// Never put a service_role or secret key here.
 // --------------------------------------------------
 
 const SUPABASE_URL = "https://kjyeplfpthoqwxzkgzzb.supabase.co";
@@ -150,8 +185,6 @@ function renderLaws(filter = "") {
 // --------------------------------------------------
 // LOAD LEGAL RESOURCES FROM SUPABASE
 // Table: public.legal_resources
-// Columns: id, title, description, category,
-//          source_url, created_at
 // --------------------------------------------------
 
 async function loadLawResources() {
@@ -238,11 +271,9 @@ async function loadLawResources() {
     }
   }
 
-  // Preserve any search text entered while resources were loading.
   renderLaws(searchInput ? searchInput.value : "");
 }
 
-// Render fallback links immediately, then load database resources.
 renderLaws();
 loadLawResources();
 
@@ -257,7 +288,7 @@ if (yearElement) {
 }
 
 // --------------------------------------------------
-// PUBLIC PAGE NAVIGATION — NO SIGN-IN REQUIRED
+// PUBLIC PAGE NAVIGATION
 // --------------------------------------------------
 
 const pageNames = [
@@ -373,8 +404,7 @@ if (lawSearch) {
 }
 
 // --------------------------------------------------
-// LIVE AI LEGAL ASSISTANT
-// Calls the same-origin Cloudflare Worker API.
+// CHAT MESSAGE RENDERING
 // --------------------------------------------------
 
 function addMessage(text, sender, label = "") {
@@ -391,10 +421,14 @@ function addMessage(text, sender, label = "") {
     ? ""
     : '<span class="message-avatar">K</span>';
 
+  // Normalize first, escape second. This preserves safe plain text
+  // while converting actual newlines to visual line breaks.
+  const displayText = normalizeAnswerText(text);
+
   item.innerHTML = `
     ${avatarHtml}
     <div class="bubble">
-      <p>${escapeHtml(text).replace(/\n/g, "<br>")}</p>
+      <p>${escapeHtml(displayText).replace(/\n/g, "<br>")}</p>
       ${label ? `<small>${escapeHtml(label)}</small>` : ""}
     </div>
   `;
@@ -405,13 +439,17 @@ function addMessage(text, sender, label = "") {
   return item;
 }
 
+// --------------------------------------------------
+// OFFICIAL LEGAL RESOURCE LINKS
+// --------------------------------------------------
+
 function addOfficialSources(sources) {
   const messages = $("#chatMessages");
+
   if (!messages || !Array.isArray(sources) || sources.length === 0) {
     return;
   }
 
-  // Validate source data before creating links.
   const safeSources = sources
     .filter(source =>
       source &&
@@ -445,8 +483,8 @@ function addOfficialSources(sources) {
       <strong>Official legal resources</strong>
       <ul>${linksHtml}</ul>
       <small>
-        These are relevant resource links, not confirmation that
-        the AI checked or relied on each source for this answer.
+        These are relevant reference links. Their appearance here
+        does not mean the AI opened or relied on them for this answer.
       </small>
     </div>
   `;
@@ -475,6 +513,11 @@ function addLoadingMessage() {
 
   return item;
 }
+
+// --------------------------------------------------
+// LIVE AI LEGAL ASSISTANT
+// Calls the same-origin Cloudflare Worker API.
+// --------------------------------------------------
 
 const chatForm = $("#chatForm");
 
@@ -553,19 +596,24 @@ if (chatForm) {
         loadingMessage.remove();
       }
 
-      const disclaimer =
-        typeof data.disclaimer === "string" && data.disclaimer.trim()
-          ? data.disclaimer.trim()
-          : "AI-generated general information. Verify applicable law using official sources.";
+      // Remove escaped Markdown and repeated closing disclaimers.
+      const answer = removeTrailingDisclaimer(data.answer);
+
+      if (!answer) {
+        throw new Error("The AI returned an empty answer after formatting.");
+      }
+
+      // Display one concise disclaimer, not both the answer's own
+      // disclaimer and the long backend disclaimer.
+      const singleDisclaimer =
+        "General legal information only; not case-specific legal advice.";
 
       addMessage(
-        `${data.answer.trim()}\n\n${disclaimer}`,
+        `${answer}\n\n${singleDisclaimer}`,
         "assistant",
-        "AI-GENERATED · NOT VERIFIED LEGAL ADVICE"
+        "GENERAL LEGAL INFORMATION"
       );
 
-      // Display source links supplied by the Worker API.
-      // The backend must return a `sources` array for links to appear.
       addOfficialSources(data.sources);
 
     } catch (error) {
