@@ -846,6 +846,44 @@ textarea, input, select { color: var(--text); }
   .chat-messages { padding: 14px; }
 }
 
+
+/* KANOON AI — Copy Answer Button */
+.copy-answer-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 9px 16px;
+  border: 1px solid #d4af37;
+  border-radius: 8px;
+  background: #fffdf5;
+  color: #80651b;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease,
+              border-color 0.2s ease, transform 0.2s ease;
+}
+
+.copy-answer-btn:hover {
+  background: #d4af37;
+  border-color: #b8952e;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.copy-answer-btn:active {
+  transform: translateY(0);
+}
+
+.copy-answer-btn:focus-visible {
+  outline: 2px solid #b8952e;
+  outline-offset: 3px;
+}
+
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
 }
