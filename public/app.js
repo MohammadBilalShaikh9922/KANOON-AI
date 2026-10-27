@@ -378,9 +378,11 @@ if (lawSearch) {
 }
 
 // --------------------------------------------------
-// DEMONSTRATION LEGAL ASSISTANT
-// This is not a live AI model.
-// --------------------------------------------------
+
+/* --------------------------------------------------
+   LIVE AI LEGAL ASSISTANT
+   Calls the same-origin Cloudflare Worker API.
+-------------------------------------------------- */
 
 function addMessage(text, sender, label = "") {
   const messages = $("#chatMessages");
@@ -408,63 +410,31 @@ function addMessage(text, sender, label = "") {
   messages.scrollTop = messages.scrollHeight;
 }
 
-function demoReply(question) {
-  const query = question.toLowerCase();
+function addLoadingMessage() {
+  const messages = $("#chatMessages");
+  if (!messages) return null;
 
-  let topic = "General legal information";
+  const item = document.createElement("div");
+  item.className = "message assistant-message";
 
-  let guidance =
-    "Write down the key facts, dates, people or organisations involved, and the outcome you want. Keep copies of relevant communications and documents. Check the applicable law and official procedure for your location before taking action.";
+  item.innerHTML = `
+    <span class="message-avatar">K</span>
+    <div class="bubble">
+      <p>Preparing your response...</p>
+      <small>Connecting to KANOON AI</small>
+    </div>
+  `;
 
-  if (
-    query.includes("tenant") ||
-    query.includes("rent") ||
-    query.includes("landlord") ||
-    query.includes("deposit")
-  ) {
-    topic = "Housing and rental issues";
+  messages.appendChild(item);
+  messages.scrollTop = messages.scrollHeight;
 
-    guidance =
-      "Review your rental agreement and any written record of the deposit, notice period, property condition and communications. Send a clear written request and keep proof of delivery. Rental rules can vary by state and the facts of your agreement, so check the relevant state law and seek local legal help if the dispute continues.";
-  } else if (
-    query.includes("consumer") ||
-    query.includes("refund") ||
-    query.includes("product") ||
-    query.includes("seller")
-  ) {
-    topic = "Consumer rights";
-
-    guidance =
-      "Keep the invoice, order details, warranty, screenshots and messages with the seller or service provider. Make a dated written complaint and state the resolution you seek. You can explore the National Consumer Helpline and official consumer commission resources. The correct forum and process depend on the facts and current rules.";
-  } else if (
-    query.includes("cyber") ||
-    query.includes("fraud") ||
-    query.includes("online") ||
-    query.includes("scam")
-  ) {
-    topic = "Cyber safety";
-
-    guidance =
-      "If money has been lost, contact your bank or payment provider immediately and use India's official cybercrime reporting portal or helpline as appropriate. Preserve transaction IDs, messages, phone numbers and screenshots. Do not share OTPs or passwords. For financial cyber fraud, call 1930 promptly and follow current official instructions.";
-  } else if (
-    query.includes("employment") ||
-    query.includes("salary") ||
-    query.includes("job") ||
-    query.includes("employer")
-  ) {
-    topic = "Employment issues";
-
-    guidance =
-      "Keep your appointment letter, contract, payslips, attendance records and written communications. Identify the state, type of employment and exact issue, because applicable rules and forums can differ. Consider a written request to HR or the employer and consult a qualified professional or relevant labour authority for case-specific advice.";
-  }
-
-  return { topic, guidance };
+  return item;
 }
 
 const chatForm = $("#chatForm");
 
 if (chatForm) {
-  chatForm.addEventListener("submit", event => {
+  chatForm.addEventListener("submit", async event => {
     event.preventDefault();
 
     const input = $("#chatInput");
@@ -477,22 +447,113 @@ if (chatForm) {
       return;
     }
 
+    if (question.length > 3000) {
+      toast("Please keep your question within 3000 characters.");
+      return;
+    }
+
+    const submitButton = chatForm.querySelector(
+      'button[type="submit"], button:not([type])'
+    );
+
+    if (chatForm.dataset.requestPending === "true") {
+      return;
+    }
+
+    chatForm.dataset.requestPending = "true";
+
+    if (submitButton) {
+      submitButton.disabled = true;
+    }
+
     addMessage(question, "user");
     input.value = "";
 
-    const { topic, guidance } = demoReply(question);
+    const loadingMessage = addLoadingMessage();
 
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          message: question
+        })
+      });
+
+      let data;
+
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error(
+          "The server returned an unexpected response. Please try again."
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "The AI service is temporarily unavailable."
+        );
+      }
+
+      if (typeof data.answer !== "string" || !data.answer.trim()) {
+        throw new Error("The AI returned an empty answer. Please try again.");
+      }
+
+      if (loadingMessage) {
+        loadingMessage.remove();
+      }
+
+      const disclaimer =
+        typeof data.disclaimer === "string" && data.disclaimer.trim()
+          ? data.disclaimer.trim()
+          : "AI-generated general information. Verify applicable law using official sources.";
+
       addMessage(
-        `Demo topic: ${topic}\n\n` +
-        `A possible starting point:\n${guidance}\n\n` +
-        "Suggested next step: check the relevant official source and consider speaking with a qualified advocate if your situation is urgent or fact-specific.",
+        `${data.answer.trim()}\n\n${disclaimer}`,
         "assistant",
-        "DEMO RESPONSE · NOT VERIFIED LEGAL ADVICE"
+        "AI-GENERATED · NOT VERIFIED LEGAL ADVICE"
       );
-    }, 220);
+
+    } catch (error) {
+      if (loadingMessage) {
+        loadingMessage.remove();
+      }
+
+      addMessage(
+        error instanceof TypeError
+          ? "I could not connect to the AI service. Please check your internet connection and try again."
+          : error.message || "Something went wrong. Please try again later.",
+        "assistant",
+        "CONNECTION OR SERVICE NOTICE"
+      );
+
+    } finally {
+      chatForm.dataset.requestPending = "false";
+
+      if (submitButton) {
+        submitButton.disabled = false;
+      }
+
+      input.focus();
+    }
   });
 }
+
+// Suggested topic buttons in the assistant sidebar.
+$$("[data-chat]").forEach(button => {
+  button.addEventListener("click", () => {
+    const input = $("#chatInput");
+    if (!input) return;
+
+    input.value = button.dataset.chat || "";
+    input.focus();
+  });
+});
 
 // Suggested topic buttons in the assistant sidebar.
 $$("[data-chat]").forEach(button => {
